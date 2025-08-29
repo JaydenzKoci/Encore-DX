@@ -1,0 +1,243 @@
+#include "audio.h"
+#include "bass/bass.h"
+#include "bass/bassopus.h"
+#include "GLFW/glfw3.h"
+
+#ifdef WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#elif __linux__
+#include <X11/Xlib.h>
+#define GLFW_EXPOSE_NATIVE_X11
+#endif
+
+#include "GLFW/glfw3native.h"
+#include <vector>
+#include <filesystem>
+#include <iostream>
+
+// Error checking macro
+#define CHECK_BASS_ERROR()                                                               \
+    {                                                                                    \
+        int errorCode = BASS_ErrorGetCode();                                             \
+        if (errorCode != BASS_OK) {                                                      \
+            std::cerr << "BASS error " << errorCode << " at line " << __LINE__           \
+                      << std::endl;                                                      \
+            return false;                                                                \
+        }                                                                                \
+    }
+
+#define CHECK_BASS_ERROR2()                                                              \
+    {                                                                                    \
+        int errorCode = BASS_ErrorGetCode();                                             \
+        if (errorCode != BASS_OK) {                                                      \
+            std::cerr << "BASS error " << errorCode << " at line " << __LINE__           \
+                      << std::endl;                                                      \
+        }                                                                                \
+    }
+
+bool Encore::AudioManager::Init() {
+#ifdef WIN32
+    if (!BASS_Init(-1, 44100, 0, glfwGetWin32Window(glfwGetCurrentContext()), NULL)) {
+        CHECK_BASS_ERROR();
+        return false;
+    }
+    BASS_PluginLoad("bassopus", 0);
+    CHECK_BASS_ERROR();
+#else
+    if (!BASS_Init(-1, 44100, 0, 0, NULL)) {
+        CHECK_BASS_ERROR();
+        return false;
+    }
+#ifdef __APPLE__
+    BASS_PluginLoad("libbassopus.dylib", 0);
+#else
+    BASS_PluginLoad("libbassopus.so", 0);
+#endif
+    CHECK_BASS_ERROR();
+#endif
+
+    return true;
+}
+
+// --- NEW DIAGNOSTIC FUNCTION IMPLEMENTATION ---
+std::string Encore::AudioManager::GetStreamStatus(unsigned int handle) const {
+    if (handle == 0) {
+        return "Invalid Handle";
+    }
+    switch (BASS_ChannelIsActive(handle)) {
+        case BASS_ACTIVE_STOPPED:
+            return "Stopped";
+        case BASS_ACTIVE_PLAYING:
+            return "Playing";
+        case BASS_ACTIVE_PAUSED:
+            return "Paused";
+        case BASS_ACTIVE_STALLED:
+            return "Stalled";
+        default:
+            return "Unknown";
+    }
+}
+
+
+void Encore::AudioManager::loadStreams(std::vector<std::pair<std::string, int> > &paths) {
+    int streams = 0;
+    for (auto &path : paths) {
+        HSTREAM streamHandle = BASS_StreamCreateFile(false, path.first.c_str(), 0, 0, 0);
+        if (streamHandle) {
+            AudioStream audio_stream;
+            audio_stream.handle = streamHandle;
+            audio_stream.instrument = path.second;
+            loadedStreams.push_back(std::move(audio_stream));
+            if (streams != 0) {
+                BASS_ChannelSetLink(
+                    loadedStreams[0].handle, loadedStreams[streams].handle
+                );
+                if (BASS_ChannelFlags(streamHandle, 0, 0) & BASS_SAMPLE_LOOP) // looping
+                                                                              // is
+                                                                              // currently
+                                                                              // enabled
+                    BASS_ChannelFlags(streamHandle, 0, BASS_SAMPLE_LOOP); // remove the
+                                                                          // LOOP flag
+            }
+            streams++;
+        } else {
+            CHECK_BASS_ERROR2();
+            std::cerr << "Failed to load stream: " << path.first << std::endl;
+        }
+    }
+}
+
+void Encore::AudioManager::unloadStreams() {
+    if (!loadedStreams.empty()) {
+        for (auto &stream : loadedStreams) {
+            StopPlayback(stream.handle);
+            BASS_StreamFree(stream.handle);
+        }
+        loadedStreams = {};
+        loadedStreams.clear();
+    }
+}
+
+void Encore::AudioManager::pauseStreams() const {
+    if (!loadedStreams.empty()) {
+        for (auto stream : loadedStreams) {
+            BASS_ChannelPause(stream.handle);
+        }
+    }
+}
+
+void Encore::AudioManager::playStreams() const {
+    if (!loadedStreams.empty()) {
+        // for (auto stream : loadedStreams) {
+        BASS_ChannelPlay(loadedStreams[0].handle, false);
+        //}
+    }
+}
+
+void Encore::AudioManager::restartStreams() const {
+    if (!loadedStreams.empty()) {
+        for (auto &stream : loadedStreams) {
+            BASS_ChannelSetPosition(stream.handle, 0, BASS_POS_BYTE);
+        }
+        BASS_ChannelPlay(loadedStreams[0].handle, true);
+    }
+}
+void Encore::AudioManager::seekStreams(double time) const {
+    if (!loadedStreams.empty()) {
+        BASS_ChannelPause(loadedStreams[0].handle);
+        for (auto &stream : loadedStreams) {
+
+            int rewindTimeBytes = BASS_ChannelSeconds2Bytes(stream.handle, time);
+            BASS_ChannelSetPosition(stream.handle, rewindTimeBytes, BASS_POS_BYTE);
+        }
+    }
+}
+
+void Encore::AudioManager::unpauseStreams() const {
+    if (!loadedStreams.empty()) {
+        for (auto &stream : loadedStreams) {
+            int rewindTimeBytes = BASS_ChannelSeconds2Bytes(stream.handle, 3.0);
+            int channelPositionBytes =
+                BASS_ChannelGetPosition(stream.handle, BASS_POS_BYTE);
+
+            int position = channelPositionBytes <= rewindTimeBytes
+                ? 0
+                : channelPositionBytes - rewindTimeBytes;
+
+            BASS_ChannelSetPosition(stream.handle, position, BASS_POS_BYTE);
+        }
+        BASS_ChannelPlay(loadedStreams[0].handle, false);
+    }
+}
+
+double Encore::AudioManager::GetMusicTimePlayed() const {
+    return BASS_ChannelBytes2Seconds(
+        loadedStreams[0].handle,
+        BASS_ChannelGetPosition(loadedStreams[0].handle, BASS_POS_BYTE)
+    );
+    CHECK_BASS_ERROR2();
+}
+
+double Encore::AudioManager::GetMusicTimeLength() const {
+    return BASS_ChannelBytes2Seconds(
+        loadedStreams[0].handle,
+        BASS_ChannelGetLength(loadedStreams[0].handle, BASS_POS_BYTE)
+    );
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::SetAudioStreamVolume(unsigned int handle, float volume) {
+    BASS_ChannelSetAttribute(handle, BASS_ATTRIB_VOL, volume);
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::UpdateMusicStream(unsigned int handle) {
+    BASS_ChannelUpdate(handle, 0);
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::BeginPlayback(unsigned int handle) {
+    BASS_ChannelStart(handle);
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::StopPlayback(unsigned int handle) {
+    BASS_ChannelStop(handle);
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::SetAudioStreamPosition(unsigned int handle, double time) {
+    int positionBytes = BASS_ChannelSeconds2Bytes(handle, time);
+    BASS_ChannelSetPosition(handle, positionBytes, BASS_POS_BYTE);
+    CHECK_BASS_ERROR2();
+}
+
+void Encore::AudioManager::loadSample(const std::string &path, const std::string &name) {
+    HSAMPLE sample = BASS_SampleLoad(false, path.c_str(), 0, 0, 1, 0);
+    if (sample) {
+        samples[name] = sample;
+    } else {
+        std::cerr << "Failed to load sample: " << path << std::endl;
+    }
+}
+
+void Encore::AudioManager::playSample(const std::string &name, float volume) {
+    auto it = samples.find(name);
+    if (it != samples.end()) {
+        HCHANNEL channel = BASS_SampleGetChannel(it->second, false);
+        BASS_ChannelSetAttribute(channel, BASS_ATTRIB_VOL, volume);
+        BASS_ChannelPlay(channel, true);
+    } else {
+        std::cerr << "Sample not found: " << name << std::endl;
+    }
+}
+
+void Encore::AudioManager::unloadSample(const std::string &name) {
+    auto it = samples.find(name);
+    if (it != samples.end()) {
+        BASS_SampleFree(it->second);
+        samples.erase(it);
+    } else {
+        std::cerr << "Sample not found: " << name << std::endl;
+    }
+}
