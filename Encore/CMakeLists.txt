@@ -118,7 +118,7 @@ execute_process(
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-        "-DGIT_COMMIT_HASH=\"BETA\"")
+        "-DGIT_COMMIT_HASH=\"${GIT_COMMIT_HASH}\"")
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
         "-DENCORE_VERSION=\"v0.2.0\"")

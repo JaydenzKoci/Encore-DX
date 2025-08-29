@@ -121,7 +121,9 @@ void resultsMenu::Draw() {
     );
     Color accentColor =
         ColorBrightness(ColorContrast(RED, -0.125f), -0.25f);
+    std::string indevWarnText = "Scoring is disabled in indev builds";
     float warningTextSize = u.hinpct(0.038f);
+    float textWidth = MeasureTextEx(assets.josefinSansItalic, indevWarnText.c_str(), warningTextSize, 0).x;
     Vector2 TopLeft = { u.LeftSide, u.hpct(0.158f) };
     DrawRectangle(0, TopLeft.y, u.LeftSide, warningTextSize, accentColor);
 
