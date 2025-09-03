@@ -425,7 +425,7 @@ void Assets::LoadAssets() {
     MultFill.materials[0].shader = MultiplierFill;
 
     // SetTextureWrap(highwayTextureOD, TEXTURE_WRAP_CLAMP);
-
+    
     odHighwayEMH.materials[0].maps[MATERIAL_MAP_ALBEDO].texture = highwayTextureOD;
 
 odHighwayX.materials[0].maps[MATERIAL_MAP_ALBEDO].texture = highwayTextureOD;
