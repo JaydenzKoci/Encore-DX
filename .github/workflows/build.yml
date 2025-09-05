@@ -48,6 +48,9 @@ jobs:
       - name: Install Make
         run: choco install make
 
+      - name: Clean previous build files
+        run: if (Test-Path build_x86) { Remove-Item -Recurse -Force build_x86 }
+
       - name: Configure CMake x86
         run: cmake -B ${{github.workspace}}/build_x86 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -A Win32
 

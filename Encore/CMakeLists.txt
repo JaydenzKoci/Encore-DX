@@ -76,6 +76,7 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--disable-postproc"
         "--disable-encoders"
         "--disable-muxers"
+        "--disable-iconv"
         "--disable-bsfs"
         "--disable-protocols"
         "--disable-indevs"
@@ -89,6 +90,10 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-avcodec"
         ${FFMPEG_ENABLE_CCACHE}
 )
+
+if(MSVC)
+  list(APPEND FFMPEG_CONFIGURE_FLAGS "--toolchain=msvc")
+endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86_64")
