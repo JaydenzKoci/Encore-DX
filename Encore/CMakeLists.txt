@@ -57,6 +57,15 @@ FetchContent_Declare(
         GIT_TAG n6.0
 )
 
+set(FFMPEG_BUILD_SHARED OFF CACHE BOOL)
+set(FFMPEG_DISABLE_EVERYTHING ON CACHE BOOL)
+set(FFMPEG_ENABLE_SWSCALE ON CACHE BOOL)
+set(FFMPEG_ENABLE_AVFORMAT ON CACHE BOOL)
+set(FFMPEG_ENABLE_AVCODEC ON CACHE BOOL)
+set(FFMPEG_ENABLE_DECODER h264 hevc vp9 mpeg4 wmv3 aac mp3 CACHE STRING)
+set(FFMPEG_ENABLE_DEMUXER mov mp4 m4a 3gp 3g2 mj2 mkv webm CACHE STRING)
+set(FFMPEG_BUILD_PROGRAMS OFF CACHE BOOL)
+
 find_program(CCACHE_EXECUTABLE ccache)
 if(CCACHE_EXECUTABLE)
   message(STATUS "Found ccache, which will be used automatically by FFmpeg to speed up rebuilds.")
