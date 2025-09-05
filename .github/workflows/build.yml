@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup MSVC
+        uses: microsoft/setup-msvc@v1
+        
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
 
@@ -41,6 +44,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msvc@v1
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
