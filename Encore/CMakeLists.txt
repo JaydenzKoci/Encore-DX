@@ -66,11 +66,6 @@ endif()
 
 
 set(FFMPEG_CONFIGURE_FLAGS
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86_64")
-        else()
-        list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86")
-        endif()
         "--disable-everything"
         "--disable-programs"
         "--disable-doc"
@@ -94,6 +89,12 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-avcodec"
         ${FFMPEG_ENABLE_CCACHE}
 )
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86_64")
+else()
+  list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86")
+endif()
 
 set(CMAKE_PROJECT_FFmpeg_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include)
 set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/build)
