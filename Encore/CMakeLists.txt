@@ -66,6 +66,7 @@ endif()
 
 
 set(FFMPEG_CONFIGURE_FLAGS
+        "--arch=x86_64"
         "--disable-everything"
         "--disable-programs"
         "--disable-doc"
@@ -80,7 +81,7 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--disable-protocols"
         "--disable-indevs"
         "--disable-outdevs"
-        "--disable-x86asm"
+        "--disable-asm"
         "--enable-protocol=file"
         "--enable-decoder=h264,hevc,vp9,mpeg4,wmv3,aac,mp3"
         "--enable-demuxer=mov,mp4,m4a,3gp,3g2,mj2,mkv,webm"
