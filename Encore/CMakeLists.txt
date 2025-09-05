@@ -59,11 +59,9 @@ FetchContent_Declare(
 
 find_program(CCACHE_EXECUTABLE ccache)
 if(CCACHE_EXECUTABLE)
-  message(STATUS "Found ccache, will use it to speed up FFmpeg rebuilds.")
-  set(FFMPEG_ENABLE_CCACHE "--enable-ccache")
+  message(STATUS "Found ccache, which will be used automatically by FFmpeg to speed up rebuilds.")
 else()
-  message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it (e.g., 'choco install ccache').")
-  set(FFMPEG_ENABLE_CCACHE "")
+  message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it.")
 endif()
 
 
