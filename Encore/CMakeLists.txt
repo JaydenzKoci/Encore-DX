@@ -67,9 +67,9 @@ endif()
 
 set(FFMPEG_CONFIGURE_FLAGS
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        "--arch=x86_64"
+        list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86_64")
         else()
-        "--arch=x86"
+        list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86")
         endif()
         "--disable-everything"
         "--disable-programs"
