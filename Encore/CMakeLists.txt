@@ -64,7 +64,6 @@ else()
   message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it.")
 endif()
 
-
 set(FFMPEG_CONFIGURE_FLAGS
         "--disable-everything"
         "--disable-programs"
@@ -76,11 +75,11 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--disable-postproc"
         "--disable-encoders"
         "--disable-muxers"
-        "--disable-iconv"
         "--disable-bsfs"
         "--disable-protocols"
         "--disable-indevs"
         "--disable-outdevs"
+        "--disable-iconv"
         "--disable-asm"
         "--enable-protocol=file"
         "--enable-decoder=h264,hevc,vp9,mpeg4,wmv3,aac,mp3"
@@ -88,7 +87,6 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-swscale"
         "--enable-avformat"
         "--enable-avcodec"
-        ${FFMPEG_ENABLE_CCACHE}
 )
 
 if(MSVC)
