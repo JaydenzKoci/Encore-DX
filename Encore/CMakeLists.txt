@@ -60,10 +60,10 @@ FetchContent_Declare(
 find_program(CCACHE_EXECUTABLE ccache)
 if(CCACHE_EXECUTABLE)
   message(STATUS "Found ccache, will use it to speed up FFmpeg rebuilds.")
-  set(FFMPEG_CC_LAUNCHER "--cc-launcher=${CCACHE_EXECUTABLE}")
+  set(FFMPEG_ENABLE_CCACHE "--enable-ccache")
 else()
   message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it (e.g., 'choco install ccache').")
-  set(FFMPEG_CC_LAUNCHER "")
+  set(FFMPEG_ENABLE_CCACHE "")
 endif()
 
 
@@ -89,7 +89,7 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-swscale"
         "--enable-avformat"
         "--enable-avcodec"
-        ${FFMPEG_CC_LAUNCHER}
+        ${FFMPEG_ENABLE_CCACHE}
 )
 
 set(CMAKE_PROJECT_FFmpeg_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include)
