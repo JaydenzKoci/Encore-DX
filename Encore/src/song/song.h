@@ -196,10 +196,11 @@ public:
     std::vector<std::pair<std::string, int> > stemsPath {};
 
     std::filesystem::path midiPath = "";
+    std::filesystem::path videoPath;
 
-    std::string songDir = "";
+    std::filesystem::path songDir = "";
     std::string albumArtPath = "";
-    std::string songInfoPath = "";
+    std::filesystem::path songInfoPath = "";
     std::string releaseYear = "";
     std::string loadingPhrase = "";
     std::vector<std::string> charters {};
@@ -212,6 +213,7 @@ public:
     std::vector<TimeSig> timesigs {};
 
     void LoadAudioINI(std::filesystem::path songPath);
+    void LoadVideoPath();
 
     void LoadAudio(std::filesystem::path jsonPath) {
         std::ifstream ifs(jsonPath);
@@ -230,8 +232,8 @@ public:
         jsonHash = picosha2::hash256_hex_string(jsonString);
         rapidjson::Document document;
         document.Parse(jsonString.c_str());
-        songInfoPath = jsonPath.string();
-        songDir = jsonPath.parent_path().string();
+        songInfoPath = jsonPath;
+        songDir = jsonPath.parent_path();
 
         if (document.IsObject()) {
             for (auto &item : document.GetObject()) {
@@ -350,8 +352,8 @@ public:
         jsonHash = picosha2::hash256_hex_string(jsonString);
         rapidjson::Document document;
         document.Parse(jsonString.c_str());
-        songInfoPath = jsonPath.string();
-        songDir = jsonPath.parent_path().string();
+        songInfoPath = jsonPath;
+        songDir = jsonPath.parent_path();
         for (auto &item : document.GetObject()) {
             if (item.name == "title" && item.value.IsString())
                 title = item.value.GetString();
@@ -483,8 +485,8 @@ public:
         jsonHash = picosha2::hash256_hex_string(jsonString);
         rapidjson::Document document;
         document.Parse(jsonString.c_str());
-        songInfoPath = jsonPath.string();
-        songDir = jsonPath.parent_path().string();
+        songInfoPath = jsonPath;
+        songDir = jsonPath.parent_path();
         if (document.IsObject()) {
             for (auto &item : document.GetObject()) {
                 if (item.name == "title" && item.value.IsString())
@@ -793,3 +795,4 @@ public:
 };
 
 #endif // ENCORE_SONG_H
+

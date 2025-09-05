@@ -3,7 +3,11 @@
 // Created by marie on 09/06/2024.
 //
 
+#include "video.h"
+
 #include <utility>
+#include <raylib.h>
+#include <filesystem>
 #include "users/player.h"
 #include "song/song.h"
 
@@ -114,6 +118,7 @@ class gameplayRenderer {
 public:
     gameplayRenderer();
     ~gameplayRenderer();
+    VideoStream backgroundVideo;
     double CurrentTick = 0.0;
     float highwayLevel = 0;
     float smasherPos = 2.4f;
@@ -150,8 +155,6 @@ public:
     Texture2D invSoloTex;
     Texture2D dividerTex[3];
     std::vector<std::vector<Camera3D>> cameraVectors;
-
-
 
     /*
     gpr.camera.position = Vector3{ 0.0f, 7.0f, -10.0f };

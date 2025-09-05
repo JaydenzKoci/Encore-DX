@@ -11,10 +11,11 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Dependencies
+include(FetchContent)
+
 set(RAYLIB_VERSION 5.5)
 find_package(raylib ${RAYLIB_VERSION} QUIET) # QUIET or REQUIRED
 if (NOT raylib_FOUND) # If there's none, fetch and build raylib
-  include(FetchContent)
   FetchContent_Declare(
           raylib
           DOWNLOAD_EXTRACT_TIMESTAMP OFF
@@ -30,7 +31,6 @@ endif()
 
 find_package(json QUIET)
 if (NOT json_FOUND)
-  include(FetchContent)
   FetchContent_Declare(
           json
           DOWNLOAD_EXTRACT_TIMESTAMP OFF
@@ -42,23 +42,123 @@ if (NOT json_FOUND)
   endif()
 endif()
 
+if(WIN32)
+  FetchContent_Declare(
+          zlib
+          GIT_REPOSITORY https://github.com/madler/zlib.git
+          GIT_TAG v1.3.1
+  )
+  FetchContent_MakeAvailable(zlib)
+endif()
+
+FetchContent_Declare(
+        ffmpeg
+        GIT_REPOSITORY https://github.com/FFmpeg/FFmpeg.git
+        GIT_TAG n6.0
+)
+
+find_program(CCACHE_EXECUTABLE ccache)
+if(CCACHE_EXECUTABLE)
+  message(STATUS "Found ccache, will use it to speed up FFmpeg rebuilds.")
+  set(FFMPEG_CC_LAUNCHER "--cc-launcher=${CCACHE_EXECUTABLE}")
+else()
+  message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it (e.g., 'choco install ccache').")
+  set(FFMPEG_CC_LAUNCHER "")
+endif()
+
+
+set(FFMPEG_CONFIGURE_FLAGS
+        "--disable-everything"
+        "--disable-programs"
+        "--disable-doc"
+        "--disable-network"
+        "--disable-avdevice"
+        "--disable-avfilter"
+        "--disable-swresample"
+        "--disable-postproc"
+        "--disable-encoders"
+        "--disable-muxers"
+        "--disable-bsfs"
+        "--disable-protocols"
+        "--disable-indevs"
+        "--disable-outdevs"
+        "--disable-x86asm"
+        "--enable-protocol=file"
+        "--enable-decoder=h264,hevc,vp9,mpeg4,wmv3,aac,mp3"
+        "--enable-demuxer=mov,mp4,m4a,3gp,3g2,mj2,mkv,webm"
+        "--enable-swscale"
+        "--enable-avformat"
+        "--enable-avcodec"
+        ${FFMPEG_CC_LAUNCHER}
+)
+
+set(CMAKE_PROJECT_FFmpeg_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include)
+set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/build)
+set(FFMPEG_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/install)
+
+FetchContent_GetProperties(ffmpeg)
+if(NOT ffmpeg_POPULATED)
+  FetchContent_MakeAvailable(ffmpeg)
+
+  if(WIN32)
+    find_program(SH_EXECUTABLE sh HINTS "C:/Program Files/Git/bin")
+    if(NOT SH_EXECUTABLE)
+      message(FATAL_ERROR "sh.exe not found. A POSIX shell (like Git Bash or MSYS2) is required to build FFmpeg on Windows and must be in the system PATH.")
+    endif()
+    find_program(MAKE_EXECUTABLE mingw32-make)
+    if(NOT MAKE_EXECUTABLE)
+      find_program(MAKE_EXECUTABLE make)
+    endif()
+
+    set(CONFIGURE_COMMAND ${SH_EXECUTABLE} ${ffmpeg_SOURCE_DIR}/configure)
+  else()
+    find_program(MAKE_EXECUTABLE make)
+    set(CONFIGURE_COMMAND ${ffmpeg_SOURCE_DIR}/configure)
+  endif()
+
+  if(NOT MAKE_EXECUTABLE)
+    message(FATAL_ERROR "'make' executable not found, but it is required to build FFmpeg.")
+  endif()
+
+  # --- Run FFmpeg's configure script ---
+  execute_process(
+          COMMAND ${CONFIGURE_COMMAND} --prefix=${FFMPEG_INSTALL_DIR} ${FFMPEG_CONFIGURE_FLAGS}
+          WORKING_DIRECTORY ${ffmpeg_SOURCE_DIR}
+          RESULT_VARIABLE FFMPEG_CONFIGURE_RESULT
+          OUTPUT_VARIABLE FFMPEG_OUTPUT
+          ERROR_VARIABLE FFMPEG_ERROR
+  )
+  if(NOT FFMPEG_CONFIGURE_RESULT EQUAL 0)
+    message(FATAL_ERROR "FFmpeg configure failed.\nOutput:\n${FFMPEG_OUTPUT}\nError:\n${FFMPEG_ERROR}")
+  endif()
+
+  execute_process(
+          COMMAND ${MAKE_EXECUTABLE} install -j
+          WORKING_DIRECTORY ${ffmpeg_SOURCE_DIR}
+          RESULT_VARIABLE FFMPEG_BUILD_RESULT
+          OUTPUT_VARIABLE FFMPEG_OUTPUT
+          ERROR_VARIABLE FFMPEG_ERROR
+  )
+  if(NOT FFMPEG_BUILD_RESULT EQUAL 0)
+    message(FATAL_ERROR "FFmpeg build failed.\nOutput:\n${FFMPEG_OUTPUT}\nError:\n${FFMPEG_ERROR}")
+  endif()
+endif()
+
+
 option(SUPPORT_FILEFORMAT_JPG "Support loading JPG as textures" ON)
-# Add all subdirectories of src
 
 file(GLOB_RECURSE SRC_FILES "src/*.cpp" "include/*.cpp" "include/*.c")
 file(GLOB_RECURSE INC_FILES "include/*.h" "include/*.h*" "src/*.h")
-# Add source files to the executable
+
 if (WIN32)
   add_executable(Encore ${SRC_FILES} ${INC_FILES} "resources.rc")
 else()
   add_executable(Encore ${SRC_FILES} ${INC_FILES})
 endif()
-# Temp player file
 
 file(COPY "Songs" DESTINATION ${CMAKE_BINARY_DIR}/Encore)
 file(COPY "Assets" DESTINATION ${CMAKE_BINARY_DIR}/Encore)
-# Set the include directory for the executable
-target_include_directories(Encore PRIVATE "include" "src")
+target_include_directories(Encore PRIVATE "include" "src" ${FFMPEG_INSTALL_DIR}/include)
 if(WIN32)
   if (CMAKE_SIZEOF_VOID_P EQUAL 4)
     find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/windows/x86/")
@@ -97,14 +197,12 @@ if(APPLE)
   file(COPY "lib/bass/macos/libbassopus.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore)
 endif()
 
-# Get the current working branch
 execute_process(
         COMMAND git rev-parse --abbrev-ref HEAD
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_BRANCH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-# Get the latest commit hash
 execute_process(
         COMMAND git rev-parse HEAD
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -128,5 +226,26 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 set_property(TARGET Encore PROPERTY CXX_STANDARD 20)
 
-target_link_libraries(Encore raylib nlohmann_json::nlohmann_json ${BASS} ${BASSOPUS} ${DISCORD-RPC})
+find_library(AVFORMAT_LIB avformat PATHS ${FFMPEG_INSTALL_DIR}/lib)
+find_library(AVCODEC_LIB avcodec PATHS ${FFMPEG_INSTALL_DIR}/lib)
+find_library(AVUTIL_LIB avutil PATHS ${FFMPEG_INSTALL_DIR}/lib)
+find_library(SWSCALE_LIB swscale PATHS ${FFMPEG_INSTALL_DIR}/lib)
+
+set(ENCORE_LIBRARIES
+        raylib
+        nlohmann_json::nlohmann_json
+        ${BASS}
+        ${BASSOPUS}
+        ${DISCORD-RPC}
+        ${AVFORMAT_LIB}
+        ${AVCODEC_LIB}
+        ${AVUTIL_LIB}
+        ${SWSCALE_LIB}
+)
+
+if(WIN32)
+  list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+endif()
+
+target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
 

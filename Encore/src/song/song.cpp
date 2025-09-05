@@ -16,6 +16,20 @@ std::map<std::string, int> IniStems = {
     { "drums_4", PartDrums },   { "crowd", Invalid }
 };
 
+void Song::LoadVideoPath() {
+    videoPath = "";
+    std::filesystem::path songDir = songInfoPath.parent_path();
+
+    if (!std::filesystem::exists(songDir)) return;
+
+    for (const auto &entry : std::filesystem::directory_iterator(songDir)) {
+        if (entry.is_regular_file() && entry.path().filename() == "video.mp4") {
+            videoPath = entry.path();
+            break;
+        }
+    }
+}
+
 void Song::LoadInfoINI(std::filesystem::path iniPath) {
     for (const auto &entry : std::filesystem::directory_iterator(iniPath.parent_path())) {
         if (entry.is_regular_file()) {
@@ -71,6 +85,8 @@ void Song::LoadInfoINI(std::filesystem::path iniPath) {
     parts[PartDrums]->diff = ini.GetInteger("song", "diff_drums_pad", -1);
 
     parts[PartVocals]->diff = ini.GetInteger("song", "diff_vocals_pad", -1);
+
+    LoadVideoPath();
 }
 
 void Song::LoadSongIni(std::filesystem::path songPath) {

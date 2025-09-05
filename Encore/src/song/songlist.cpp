@@ -158,9 +158,9 @@ void SongList::WriteCache() {
     SongCache << (size_t)songs.size();
 
     for (const auto &song : songs) {
-        SongCache << song.songDir;
+        SongCache << song.songDir.string();
         SongCache << song.albumArtPath;
-        SongCache << song.songInfoPath;
+        SongCache << song.songInfoPath.string();
         SongCache << song.jsonHash;
 
         SongCache << song.title;
@@ -170,9 +170,9 @@ void SongList::WriteCache() {
         SongCache << song.releaseYear;
 
         Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Song found:     %s - %s", song.title.c_str(), song.artist.c_str()));
-        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Directory:      %s", song.songDir.c_str()));
+        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Directory:      %s", song.songDir.string().c_str()));
         Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Album Art Path: %s", song.albumArtPath.c_str()));
-        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Song Info Path: %s", song.songInfoPath.c_str()));
+        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Song Info Path: %s", song.songInfoPath.string().c_str()));
         Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Song length:    %01i", song.length));
     }
 
@@ -234,8 +234,8 @@ void SongList::ScanSongs(const std::vector<std::filesystem::path> &songsFolder) 
                     song.previewStartTime = 500;
                 }
             } else if (std::filesystem::exists(entry.path() / "song.ini")) {
-                song.songInfoPath = (entry.path() / "song.ini").string();
-                song.songDir = entry.path().string();
+                song.songInfoPath = (entry.path() / "song.ini");
+                song.songDir = entry.path();
                 song.LoadSongIni(entry.path());
                 song.ini = true;
                 if (std::filesystem::exists(infoPath)) {
@@ -402,11 +402,15 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
         CurrentChartNumber = i;
         Song song;
 
+        std::string songDirStr, songInfoPathStr;
         // Read cache values
-        SongCacheIn >> song.songDir;
+        SongCacheIn >> songDirStr;
         SongCacheIn >> song.albumArtPath;
-        SongCacheIn >> song.songInfoPath;
+        SongCacheIn >> songInfoPathStr;
         SongCacheIn >> song.jsonHash;
+
+        song.songDir = songDirStr;
+        song.songInfoPath = songInfoPathStr;
 
         SongCacheIn >> song.title;
         SongCacheIn >> song.artist;
@@ -414,14 +418,14 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
         SongCacheIn >> song.length;
         SongCacheIn >> song.releaseYear;
 
-        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Directory - %s", song.songDir.c_str()));
+        Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Directory - %s", song.songDir.string().c_str()));
 
         if (!std::filesystem::exists(song.songDir)) {
             continue;
         }
 
         // Set other info properties
-        if (std::filesystem::path(song.songInfoPath).filename() == "song.ini") {
+        if (song.songInfoPath.filename() == "song.ini") {
             song.ini = true;
         }
 
@@ -439,7 +443,7 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
         if (song.jsonHash != jsonHashNew) {
             continue;
         }
-        loadedSongs.insert(song.songDir);
+        loadedSongs.insert(song.songDir.string());
         songs.push_back(std::move(song));
 
     }
@@ -473,8 +477,8 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
             if (std::filesystem::exists(entry.path() / "song.ini")) {
                 if (loadedSongs.find(entry.path().string()) == loadedSongs.end()) {
                     Song song;
-                    song.songInfoPath = (entry.path() / "song.ini").string();
-                    song.songDir = entry.path().string();
+                    song.songInfoPath = (entry.path() / "song.ini");
+                    song.songDir = entry.path();
                     song.LoadSongIni(entry.path());
                     song.ini = true;
 
