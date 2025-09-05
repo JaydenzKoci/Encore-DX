@@ -66,7 +66,11 @@ endif()
 
 
 set(FFMPEG_CONFIGURE_FLAGS
+        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         "--arch=x86_64"
+        else()
+        "--arch=x86"
+        endif()
         "--disable-everything"
         "--disable-programs"
         "--disable-doc"
@@ -242,8 +246,8 @@ set(ENCORE_LIBRARIES
         ${SWSCALE_LIB}
 )
 
-if(WIN32)
-  list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+if(UNIX AND NOT APPLE)
+  list(APPEND ENCORE_LIBRARIES z)
 endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
