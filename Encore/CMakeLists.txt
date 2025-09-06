@@ -231,7 +231,7 @@ set(ENCORE_LIBRARIES
         ${SWSCALE_LIB}
 )
 if(UNIX AND APPLE)
-  listlist(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+  list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
 endif()
 
 if(WIN32)
