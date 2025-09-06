@@ -48,6 +48,7 @@ if(WIN32)
           GIT_REPOSITORY https://github.com/madler/zlib.git
           GIT_TAG v1.3.1
   )
+  set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Z" FORCE)
   FetchContent_MakeAvailable(zlib)
 endif()
 
@@ -80,6 +81,7 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-swscale"
         "--enable-avformat"
         "--enable-avcodec"
+        "--enable-zlib"
 )
 
 set(CMAKE_PROJECT_FFmpeg_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include)
@@ -230,12 +232,18 @@ set(ENCORE_LIBRARIES
         ${AVUTIL_LIB}
         ${SWSCALE_LIB}
 )
+if(UNIX AND NOT APPLE)
+  find_package(ZLIB REQUIRED)
+  list(APPEND ENCORE_LIBRARIES ZLIB::ZLIB)
+endif()
 if(UNIX AND APPLE)
   list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
 endif()
-
 if(WIN32)
   list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+endif()
+if(UNIX AND NOT APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-fatal-warnings")
 endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})

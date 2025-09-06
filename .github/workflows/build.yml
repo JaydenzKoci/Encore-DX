@@ -39,6 +39,21 @@ jobs:
           name: Encore_Win_x64-Indev
           path: ${{github.workspace}}/build_x64/Encore/Release/*
 
+      - name: Upload FFmpeg Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-logs
+          path: |
+            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+
   build-windows-x86:
     runs-on: windows-latest
 
@@ -68,6 +83,21 @@ jobs:
           name: Encore_Win_x86-Indev
           path: ${{github.workspace}}/build_x86/Encore/Release/*
 
+      - name: Upload FFmpeg Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-logs
+          path: |
+            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+
   build-linux:
     runs-on: ubuntu-latest
 
@@ -81,7 +111,7 @@ jobs:
         run: sudo apt-get update
 
       - name: Install Dependencies
-        run: sudo apt-get install libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+        run: sudo apt-get install libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev zlib1g-dev
 
       - name: Configure CMake x64
         run: cmake -B ${{github.workspace}}/build_linux_x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -97,6 +127,21 @@ jobs:
         with:
           name: Encore_Linux_x64-Indev
           path: ${{github.workspace}}/build_linux_x64/Encore/*
+
+      - name: Upload FFmpeg Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-logs
+          path: |
+            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
 
   build-macos:
     runs-on: macos-latest
@@ -129,3 +174,27 @@ jobs:
         with:
           name: Encore_macOS-Indev
           path: ${{github.workspace}}/Encore.dmg
+
+      - name: Upload FFmpeg Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-logs
+          path: |
+            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
+            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+
+      - name: Upload Build Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build-logs
+          path: |
+            ${{github.workspace}}/build_linux_x64/**/*.log
+            ${{github.workspace}}/build_linux_x64/Encore/CMakeFiles/*.log
