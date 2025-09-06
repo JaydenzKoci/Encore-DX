@@ -57,22 +57,6 @@ FetchContent_Declare(
         GIT_TAG n6.0
 )
 
-set(FFMPEG_BUILD_SHARED OFF CACHE BOOL)
-set(FFMPEG_DISABLE_EVERYTHING ON CACHE BOOL)
-set(FFMPEG_ENABLE_SWSCALE ON CACHE BOOL)
-set(FFMPEG_ENABLE_AVFORMAT ON CACHE BOOL)
-set(FFMPEG_ENABLE_AVCODEC ON CACHE BOOL)
-set(FFMPEG_ENABLE_DECODER h264 hevc vp9 mpeg4 wmv3 aac mp3 CACHE STRING)
-set(FFMPEG_ENABLE_DEMUXER mov mp4 m4a 3gp 3g2 mj2 mkv webm CACHE STRING)
-set(FFMPEG_BUILD_PROGRAMS OFF CACHE BOOL)
-
-find_program(CCACHE_EXECUTABLE ccache)
-if(CCACHE_EXECUTABLE)
-  message(STATUS "Found ccache, which will be used automatically by FFmpeg to speed up rebuilds.")
-else()
-  message(STATUS "ccache not found. For faster FFmpeg rebuilds, consider installing it.")
-endif()
-
 set(FFMPEG_CONFIGURE_FLAGS
         "--disable-everything"
         "--disable-programs"
@@ -97,16 +81,6 @@ set(FFMPEG_CONFIGURE_FLAGS
         "--enable-avformat"
         "--enable-avcodec"
 )
-
-if(MSVC)
-  list(APPEND FFMPEG_CONFIGURE_FLAGS "--toolchain=msvc")
-endif()
-
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-  list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86_64")
-else()
-  list(APPEND FFMPEG_CONFIGURE_FLAGS "--arch=x86")
-endif()
 
 set(CMAKE_PROJECT_FFmpeg_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include)
 set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/build)
@@ -136,7 +110,6 @@ if(NOT ffmpeg_POPULATED)
     message(FATAL_ERROR "'make' executable not found, but it is required to build FFmpeg.")
   endif()
 
-  # --- Run FFmpeg's configure script ---
   execute_process(
           COMMAND ${CONFIGURE_COMMAND} --prefix=${FFMPEG_INSTALL_DIR} ${FFMPEG_CONFIGURE_FLAGS}
           WORKING_DIRECTORY ${ffmpeg_SOURCE_DIR}
@@ -165,7 +138,6 @@ option(SUPPORT_FILEFORMAT_JPG "Support loading JPG as textures" ON)
 
 file(GLOB_RECURSE SRC_FILES "src/*.cpp" "include/*.cpp" "include/*.c")
 file(GLOB_RECURSE INC_FILES "include/*.h" "include/*.h*" "src/*.h")
-
 if (WIN32)
   add_executable(Encore ${SRC_FILES} ${INC_FILES} "resources.rc")
 else()
@@ -258,9 +230,12 @@ set(ENCORE_LIBRARIES
         ${AVUTIL_LIB}
         ${SWSCALE_LIB}
 )
+if(UNIX AND APPLE)
+  listlist(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+endif()
 
-if(UNIX AND NOT APPLE)
-  list(APPEND ENCORE_LIBRARIES z)
+if(WIN32)
+  list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
 endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
