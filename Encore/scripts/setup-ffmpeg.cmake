@@ -11,7 +11,7 @@ function(setup_ffmpeg)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
         else()
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
+            set(FFMPEG_PACKAGE "ffmpeg-master-latest-winarm64-gpl-shared")
             set(PLATFORM_NAME "Windows x86")
         endif()
         set(ARCHIVE_EXT "zip")
@@ -242,20 +242,39 @@ function(copy_ffmpeg_binaries TARGET_DIR)
     endif()
 endfunction()
 
-function(setup_ffmpeg_post_build TARGET_NAME TARGET_DIR)
+function(setup_all_post_build TARGET_NAME TARGET_DIR)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "Copying assets and dependencies..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}"
+        
+        # Copy assets (Songs and Assets folders)
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Encore/Songs"
+            "${TARGET_DIR}/Songs"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/Encore/Assets"
+            "${TARGET_DIR}/Assets"
+    )
+    
     if(WIN32)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E echo "Ensuring FFmpeg DLLs are present..."
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}"
+            # Copy FFmpeg DLLs
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${FFMPEG_BIN_DIR}"
                 "${TARGET_DIR}"
-            COMMENT "Copying FFmpeg binaries to output directory"
+            
+            COMMENT "Copying Windows dependencies to output directory"
         )
     elseif(UNIX AND NOT APPLE)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E echo "Ensuring FFmpeg shared libraries are present..."
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}"
+            # Copy Discord RPC, BASS, and BASSOPUS libraries
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/Encore/lib/discord-rpc/linux/x64/libdiscord-rpc.so"
+                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/linux/x86_64/libbass.so"
+                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/linux/x86_64/libbassopus.so"
+                "${TARGET_DIR}/"
+            
+            # Copy FFmpeg shared libraries
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${FFMPEG_LIB_DIR}/libavformat${FFMPEG_SHARED_SUFFIX}*
                 ${FFMPEG_LIB_DIR}/libavcodec${FFMPEG_SHARED_SUFFIX}*
@@ -265,7 +284,24 @@ function(setup_ffmpeg_post_build TARGET_NAME TARGET_DIR)
                 ${FFMPEG_LIB_DIR}/libavfilter${FFMPEG_SHARED_SUFFIX}*
                 ${FFMPEG_LIB_DIR}/libavdevice${FFMPEG_SHARED_SUFFIX}*
                 "${TARGET_DIR}/"
-            COMMENT "Copying FFmpeg shared libraries to output directory"
+            
+            COMMENT "Copying Linux dependencies to output directory"
+        )
+    elseif(APPLE)
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            # Copy Discord RPC, BASS, and BASSOPUS libraries
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/Encore/lib/discord-rpc/macos/libdiscord-rpc.dylib"
+                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/macos/libbass.dylib"
+                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/macos/libbassopus.dylib"
+                "${TARGET_DIR}/"
+            
+            COMMENT "Copying macOS dependencies to output directory"
         )
     endif()
+endfunction()
+
+# Legacy function for backward compatibility
+function(setup_ffmpeg_post_build TARGET_NAME TARGET_DIR)
+    setup_all_post_build(${TARGET_NAME} ${TARGET_DIR})
 endfunction()

@@ -91,18 +91,6 @@ else()
   add_executable(Encore ${SRC_FILES} ${INC_FILES})
 endif()
 
-# Copy assets to the appropriate output directory based on configuration
-if(CMAKE_CONFIGURATION_TYPES)
-    # Multi-config generators
-    foreach(config ${CMAKE_CONFIGURATION_TYPES})
-        file(COPY "Songs" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
-        file(COPY "Assets" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
-    endforeach()
-else()
-    # Single-config generators
-    file(COPY "Songs" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-    file(COPY "Assets" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-endif()
 target_include_directories(Encore PRIVATE "include" "src" ${FFMPEG_INCLUDE_DIR})
 if(WIN32)
   if (CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -150,26 +138,16 @@ if(UNIX AND NOT APPLE)
     find_library(BASS NAMES bass PATHS "lib/bass/linux/x86_64")
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/linux/x86_64")
     
-    # Copy shared libraries to output directory
-    file(COPY "lib/discord-rpc/linux/x64/libdiscord-rpc.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-    file(COPY "lib/bass/linux/x86_64/libbass.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-    file(COPY "lib/bass/linux/x86_64/libbassopus.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
   endif()
   
-  # Copy FFmpeg binaries for Linux - this will be handled by the post-build step
+  # Copy shared libraries and FFmpeg binaries will be handled by post-build step
 endif()
 if(APPLE)
   find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/macos")
   find_library(BASS NAMES bass PATHS "lib/bass/macos")
   find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/macos")
   
-  # Copy dynamic libraries to output directory
-  file(COPY "lib/discord-rpc/macos/libdiscord-rpc.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-  file(COPY "lib/bass/macos/libbass.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-  file(COPY "lib/bass/macos/libbassopus.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
-  
-  # Copy FFmpeg binaries for macOS - this will be handled by the post-build step
 endif()
 
 execute_process(
@@ -227,12 +205,12 @@ endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
 
-# Add post-build step to ensure FFmpeg DLLs are available
+# Add post-build step to copy all assets and dependencies
 if(CMAKE_CONFIGURATION_TYPES)
     # For multi-config generators, we need to use generator expressions
-    setup_ffmpeg_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/$<CONFIG>)
+    setup_all_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/$<CONFIG>)
 else()
     # For single-config generators
-    setup_ffmpeg_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    setup_all_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
 endif()
 
