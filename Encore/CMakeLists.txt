@@ -189,12 +189,9 @@ set(ENCORE_LIBRARIES
         ${DISCORD-RPC}
         ${FFMPEG_LIBRARIES}
 )
-if(UNIX AND NOT APPLE)
+if(UNIX)
   find_package(ZLIB REQUIRED)
   list(APPEND ENCORE_LIBRARIES ZLIB::ZLIB)
-endif()
-if(UNIX AND APPLE)
-  list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
 endif()
 if(WIN32)
   list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
