@@ -298,6 +298,14 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             
             COMMENT "Copying macOS dependencies to output directory"
         )
+        
+        if(FFMPEG_LIB_DIR)
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg libraries from ${FFMPEG_LIB_DIR}..."
+                COMMAND bash -c "for lib in libavformat libavcodec libavutil libswscale libswresample libavfilter libavdevice; do if [ -f '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' ]; then ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' '${TARGET_DIR}/'; fi; done"
+                COMMENT "Copying FFmpeg dylibs to output directory"
+            )
+        endif()
     endif()
 endfunction()
 
