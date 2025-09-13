@@ -19,12 +19,13 @@ function(setup_ffmpeg)
         set(LIB_SUFFIX ".lib")
         set(SHARED_SUFFIX ".dll")
     elseif(APPLE)
-        set(FFMPEG_PACKAGE "ffmpeg-master-latest-macos64-gpl-shared")
-        set(PLATFORM_NAME "macOS x64")
-        set(ARCHIVE_EXT "zip")
+        set(FFMPEG_PACKAGE "")
+        set(PLATFORM_NAME "macOS")
+        set(ARCHIVE_EXT "")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".dylib")
         set(SHARED_SUFFIX ".dylib")
+        set(USE_SYSTEM_FFMPEG TRUE)
     elseif(UNIX)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-linux64-gpl-shared")
@@ -41,28 +42,55 @@ function(setup_ffmpeg)
     
     message(STATUS "Setting up FFmpeg for ${PLATFORM_NAME}")
 
-    set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
-    set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
+    if(APPLE)
+        find_package(PkgConfig QUIET)
+        if(PKG_CONFIG_FOUND)
+            pkg_check_modules(FFMPEG QUIET libavformat libavcodec libavutil libswscale)
+            if(FFMPEG_FOUND)
+                message(STATUS "Found system FFmpeg via pkg-config")
+                set(FFMPEG_INCLUDE_DIR ${FFMPEG_INCLUDE_DIRS} PARENT_SCOPE)
+                set(FFMPEG_LIB_DIR ${FFMPEG_LIBRARY_DIRS} PARENT_SCOPE)
+                set(FFMPEG_BIN_DIR "" PARENT_SCOPE)
+                return()
+            endif()
+        endif()
 
-    include(FetchContent)
-    FetchContent_Declare(
-        ffmpeg_prebuilt
-        URL ${FFMPEG_URL}
-        DOWNLOAD_EXTRACT_TIMESTAMP OFF
-    )
-    
-    FetchContent_GetProperties(ffmpeg_prebuilt)
-    if(NOT ffmpeg_prebuilt_POPULATED)
-        message(STATUS "Downloading FFmpeg prebuilt binaries...")
-        FetchContent_MakeAvailable(ffmpeg_prebuilt)
+        set(HOMEBREW_PREFIXES "/opt/homebrew" "/usr/local")
+        foreach(PREFIX ${HOMEBREW_PREFIXES})
+            if(EXISTS "${PREFIX}/include/libavformat/avformat.h")
+                message(STATUS "Found FFmpeg in Homebrew at ${PREFIX}")
+                set(FFMPEG_INCLUDE_DIR "${PREFIX}/include" PARENT_SCOPE)
+                set(FFMPEG_LIB_DIR "${PREFIX}/lib" PARENT_SCOPE)
+                set(FFMPEG_BIN_DIR "${PREFIX}/bin" PARENT_SCOPE)
+                return()
+            endif()
+        endforeach()
+        
+        message(FATAL_ERROR "FFmpeg not found on macOS. Please install via Homebrew: brew install ffmpeg")
+    else()
+        set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
+        set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
 
-        file(COPY ${ffmpeg_prebuilt_SOURCE_DIR}/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
-        message(STATUS "FFmpeg setup complete for ${PLATFORM_NAME}")
+        include(FetchContent)
+        FetchContent_Declare(
+            ffmpeg_prebuilt
+            URL ${FFMPEG_URL}
+            DOWNLOAD_EXTRACT_TIMESTAMP OFF
+        )
+        
+        FetchContent_GetProperties(ffmpeg_prebuilt)
+        if(NOT ffmpeg_prebuilt_POPULATED)
+            message(STATUS "Downloading FFmpeg prebuilt binaries...")
+            FetchContent_MakeAvailable(ffmpeg_prebuilt)
+
+            file(COPY ${ffmpeg_prebuilt_SOURCE_DIR}/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg)
+            message(STATUS "FFmpeg setup complete for ${PLATFORM_NAME}")
+        endif()
+
+        set(FFMPEG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include" PARENT_SCOPE)
+        set(FFMPEG_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib" PARENT_SCOPE)
+        set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/bin" PARENT_SCOPE)
     endif()
-
-    set(FFMPEG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include" PARENT_SCOPE)
-    set(FFMPEG_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib" PARENT_SCOPE)
-    set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/bin" PARENT_SCOPE)
     set(FFMPEG_LIB_PREFIX "${LIB_PREFIX}" PARENT_SCOPE)
     set(FFMPEG_LIB_SUFFIX "${LIB_SUFFIX}" PARENT_SCOPE)
     set(FFMPEG_SHARED_SUFFIX "${SHARED_SUFFIX}" PARENT_SCOPE)
@@ -70,47 +98,81 @@ function(setup_ffmpeg)
 endfunction()
 
 function(find_ffmpeg_libraries)
-    find_library(AVFORMAT_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}avformat${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(AVCODEC_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}avcodec${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(AVUTIL_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}avutil${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(SWSCALE_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}swscale${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-
-    find_library(SWRESAMPLE_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(AVFILTER_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(AVDEVICE_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}avdevice${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
-    find_library(POSTPROC_LIB 
-        NAMES ${FFMPEG_LIB_PREFIX}postproc${FFMPEG_LIB_SUFFIX}
-        PATHS ${FFMPEG_LIB_DIR} 
-        NO_DEFAULT_PATH
-    )
+    if(APPLE AND USE_SYSTEM_FFMPEG)
+        find_library(AVFORMAT_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avformat${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(AVCODEC_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avcodec${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(AVUTIL_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avutil${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(SWSCALE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}swscale${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(SWRESAMPLE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(AVFILTER_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(AVDEVICE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avdevice${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+        find_library(POSTPROC_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}postproc${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR}
+        )
+    else()
+        find_library(AVFORMAT_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avformat${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(AVCODEC_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avcodec${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(AVUTIL_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avutil${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(SWSCALE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}swscale${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(SWRESAMPLE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(AVFILTER_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(AVDEVICE_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}avdevice${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+        find_library(POSTPROC_LIB 
+            NAMES ${FFMPEG_LIB_PREFIX}postproc${FFMPEG_LIB_SUFFIX}
+            PATHS ${FFMPEG_LIB_DIR} 
+            NO_DEFAULT_PATH
+        )
+    endif()
 
     if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
         message(FATAL_ERROR "Required FFmpeg libraries not found!")

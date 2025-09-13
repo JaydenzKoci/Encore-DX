@@ -2,6 +2,7 @@
 # project specific logic here.
 #
 cmake_minimum_required(VERSION 3.11)
+project(Encore)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_OSX_ARCHITECTURES x86_64)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
