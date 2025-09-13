@@ -246,10 +246,26 @@ function(setup_ffmpeg_post_build TARGET_NAME TARGET_DIR)
     if(WIN32)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E echo "Ensuring FFmpeg DLLs are present..."
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}"
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${FFMPEG_BIN_DIR}"
                 "${TARGET_DIR}"
             COMMENT "Copying FFmpeg binaries to output directory"
+        )
+    elseif(UNIX AND NOT APPLE)
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Ensuring FFmpeg shared libraries are present..."
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${FFMPEG_LIB_DIR}/libavformat${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libavcodec${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libavutil${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libswscale${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libswresample${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libavfilter${FFMPEG_SHARED_SUFFIX}*
+                ${FFMPEG_LIB_DIR}/libavdevice${FFMPEG_SHARED_SUFFIX}*
+                "${TARGET_DIR}/"
+            COMMENT "Copying FFmpeg shared libraries to output directory"
         )
     endif()
 endfunction()

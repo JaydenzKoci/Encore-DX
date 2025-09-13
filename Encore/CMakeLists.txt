@@ -10,9 +10,28 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set output directories to match expected structure
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake-build-debug/Encore)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake-build-debug/Encore)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/cmake-build-debug/Encore)
+# Use config-specific directories for multi-config generators (like Visual Studio)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Encore/Debug)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Encore/Release)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/Encore/RelWithDebInfo)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}/Encore/MinSizeRel)
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Encore/Debug)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Encore/Release)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/Encore/RelWithDebInfo)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}/Encore/MinSizeRel)
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Encore/Debug)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Encore/Release)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/Encore/RelWithDebInfo)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}/Encore/MinSizeRel)
+
+# For single-config generators (like Make), use the build type
+if(NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+endif()
 
 # Dependencies
 include(FetchContent)
@@ -72,54 +91,85 @@ else()
   add_executable(Encore ${SRC_FILES} ${INC_FILES})
 endif()
 
-file(COPY "Songs" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-file(COPY "Assets" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+# Copy assets to the appropriate output directory based on configuration
+if(CMAKE_CONFIGURATION_TYPES)
+    # Multi-config generators
+    foreach(config ${CMAKE_CONFIGURATION_TYPES})
+        file(COPY "Songs" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+        file(COPY "Assets" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+    endforeach()
+else()
+    # Single-config generators
+    file(COPY "Songs" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    file(COPY "Assets" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+endif()
 target_include_directories(Encore PRIVATE "include" "src" ${FFMPEG_INCLUDE_DIR})
 if(WIN32)
   if (CMAKE_SIZEOF_VOID_P EQUAL 4)
     find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/windows/x86/")
-    file(COPY "lib/discord-rpc/windows/x86/discord-rpc.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASS NAMES bass PATHS "lib/bass/windows/x86/")
-    file(COPY "lib/bass/windows/x86/bass.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/windows/x86/")
-    file(COPY "lib/bass/windows/x86/bassopus.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    
+    # Copy DLLs to appropriate output directories
+    if(CMAKE_CONFIGURATION_TYPES)
+        foreach(config ${CMAKE_CONFIGURATION_TYPES})
+            file(COPY "lib/discord-rpc/windows/x86/discord-rpc.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+            file(COPY "lib/bass/windows/x86/bass.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+            file(COPY "lib/bass/windows/x86/bassopus.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+        endforeach()
+    else()
+        file(COPY "lib/discord-rpc/windows/x86/discord-rpc.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+        file(COPY "lib/bass/windows/x86/bass.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+        file(COPY "lib/bass/windows/x86/bassopus.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    endif()
   endif()
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/windows/x64/")
-    file(COPY "lib/discord-rpc/windows/x64/discord-rpc.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASS NAMES bass PATHS "lib/bass/windows/x64/")
-    file(COPY "lib/bass/windows/x64/bass.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/windows/x64/")
-    file(COPY "lib/bass/windows/x64/bassopus.dll" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    
+    # Copy DLLs to appropriate output directories
+    if(CMAKE_CONFIGURATION_TYPES)
+        foreach(config ${CMAKE_CONFIGURATION_TYPES})
+            file(COPY "lib/discord-rpc/windows/x64/discord-rpc.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+            file(COPY "lib/bass/windows/x64/bass.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+            file(COPY "lib/bass/windows/x64/bassopus.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${config})
+        endforeach()
+    else()
+        file(COPY "lib/discord-rpc/windows/x64/discord-rpc.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+        file(COPY "lib/bass/windows/x64/bass.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+        file(COPY "lib/bass/windows/x64/bassopus.dll" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    endif()
   endif()
   
-  # Copy FFmpeg binaries for Windows
-  copy_ffmpeg_binaries(${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  # Copy FFmpeg binaries for Windows - this will be handled by the post-build step
 endif()
 if(UNIX AND NOT APPLE)
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
     find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/linux/x64")
-    file(COPY "lib/discord-rpc/linux/x64/libdiscord-rpc.so" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASS NAMES bass PATHS "lib/bass/linux/x86_64")
-    file(COPY "lib/bass/linux/x86_64/libbass.so" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/linux/x86_64")
-    file(COPY "lib/bass/linux/x86_64/libbassopus.so" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    
+    # Copy shared libraries to output directory
+    file(COPY "lib/discord-rpc/linux/x64/libdiscord-rpc.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    file(COPY "lib/bass/linux/x86_64/libbass.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+    file(COPY "lib/bass/linux/x86_64/libbassopus.so" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
   endif()
   
-  # Copy FFmpeg binaries for Linux
-  copy_ffmpeg_binaries(${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  # Copy FFmpeg binaries for Linux - this will be handled by the post-build step
 endif()
 if(APPLE)
   find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/macos")
-  file(COPY "lib/discord-rpc/macos/libdiscord-rpc.dylib" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   find_library(BASS NAMES bass PATHS "lib/bass/macos")
-  file(COPY "lib/bass/macos/libbass.dylib" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/macos")
-  file(COPY "lib/bass/macos/libbassopus.dylib" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   
-  # Copy FFmpeg binaries for macOS
-  copy_ffmpeg_binaries(${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  # Copy dynamic libraries to output directory
+  file(COPY "lib/discord-rpc/macos/libdiscord-rpc.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+  file(COPY "lib/bass/macos/libbass.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+  file(COPY "lib/bass/macos/libbassopus.dylib" DESTINATION ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+  
+  # Copy FFmpeg binaries for macOS - this will be handled by the post-build step
 endif()
 
 execute_process(
@@ -178,5 +228,11 @@ endif()
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
 
 # Add post-build step to ensure FFmpeg DLLs are available
-setup_ffmpeg_post_build(Encore ${CMAKE_BINARY_DIR}/Encore)
+if(CMAKE_CONFIGURATION_TYPES)
+    # For multi-config generators, we need to use generator expressions
+    setup_ffmpeg_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/$<CONFIG>)
+else()
+    # For single-config generators
+    setup_ffmpeg_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
+endif()
 
