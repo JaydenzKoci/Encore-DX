@@ -31,17 +31,6 @@ jobs:
       - name: Build x64
         run: cmake --build ${{github.workspace}}/build_x64 --config ${{env.BUILD_TYPE}}
 
-      - name: Verify FFmpeg DLLs
-        run: |
-          echo "Checking for FFmpeg DLLs in build directory..."
-          ls ${{github.workspace}}/build_x64/Encore/Release/ | findstr /i "av\|sw"
-          if (Test-Path "${{github.workspace}}/build_x64/Encore/Release/avcodec*.dll") {
-            echo "✓ FFmpeg DLLs found"
-          } else {
-            echo "⚠ FFmpeg DLLs not found"
-            ls ${{github.workspace}}/build_x64/Encore/Release/
-          }
-
       - uses: actions/upload-artifact@v4
         with:
           name: Encore_Win_x64-Indev
@@ -76,17 +65,6 @@ jobs:
 
       - name: Build x86
         run: cmake --build ${{github.workspace}}/build_x86 --config ${{env.BUILD_TYPE}}
-
-      - name: Verify FFmpeg DLLs
-        run: |
-          echo "Checking for FFmpeg DLLs in build directory..."
-          ls ${{github.workspace}}/build_x86/Encore/Release/ | findstr /i "av\|sw"
-          if (Test-Path "${{github.workspace}}/build_x86/Encore/Release/avcodec*.dll") {
-            echo "✓ FFmpeg DLLs found"
-          } else {
-            echo "⚠ FFmpeg DLLs not found"
-            ls ${{github.workspace}}/build_x86/Encore/Release/
-          }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -123,17 +101,6 @@ jobs:
       - name: Build x64
         run: cmake --build ${{github.workspace}}/build_linux_x64 --config ${{env.BUILD_TYPE}}
 
-      - name: Verify FFmpeg Libraries
-        run: |
-          echo "Checking for FFmpeg shared libraries..."
-          ls ${{github.workspace}}/build_linux_x64/Encore/ | grep -E "(libav|libsw)" || echo "No FFmpeg libraries found"
-          if [ -f "${{github.workspace}}/build_linux_x64/Encore/libavcodec.so"* ]; then
-            echo "✓ FFmpeg libraries found"
-          else
-            echo "⚠ FFmpeg libraries not found"
-            ls -la ${{github.workspace}}/build_linux_x64/Encore/
-          fi
-
       - name: Remove CMake files x64
         working-directory: ${{github.workspace}}/build_linux_x64/Encore
         run: rm -r -f CMakeFiles Makefile cmake_install.cmake
@@ -166,17 +133,6 @@ jobs:
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build_macos --config ${{env.BUILD_TYPE}}
-
-      - name: Verify FFmpeg Libraries
-        run: |
-          echo "Checking for FFmpeg dylibs..."
-          ls ${{github.workspace}}/build_macos/Encore/ | grep -E "(libav|libsw)" || echo "No FFmpeg libraries found"
-          if [ -f "${{github.workspace}}/build_macos/Encore/libavcodec"*.dylib ]; then
-            echo "✓ FFmpeg libraries found"
-          else
-            echo "⚠ FFmpeg libraries not found"
-            ls -la ${{github.workspace}}/build_macos/Encore/
-          fi
 
       - name: Remove CMake files
         working-directory: ${{github.workspace}}/build_macos/Encore
