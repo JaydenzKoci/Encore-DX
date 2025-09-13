@@ -25,34 +25,36 @@ jobs:
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
 
-      - name: Install Make
-        run: choco install make
-
       - name: Configure CMake x64
         run: cmake -B ${{github.workspace}}/build_x64 -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
       - name: Build x64
         run: cmake --build ${{github.workspace}}/build_x64 --config ${{env.BUILD_TYPE}}
 
+      - name: Verify FFmpeg DLLs
+        run: |
+          echo "Checking for FFmpeg DLLs in build directory..."
+          ls ${{github.workspace}}/build_x64/Encore/Release/ | findstr /i "av\|sw"
+          if (Test-Path "${{github.workspace}}/build_x64/Encore/Release/avcodec*.dll") {
+            echo "✓ FFmpeg DLLs found"
+          } else {
+            echo "⚠ FFmpeg DLLs not found"
+            ls ${{github.workspace}}/build_x64/Encore/Release/
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: Encore_Win_x64-Indev
           path: ${{github.workspace}}/build_x64/Encore/Release/*
 
-      - name: Upload FFmpeg Logs
+      - name: Upload Build Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-logs
+          name: windows-x64-build-logs
           path: |
-            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x64/**/*.log
+            ${{github.workspace}}/build_x64/Encore/CMakeFiles/*.log
 
   build-windows-x86:
     runs-on: windows-latest
@@ -66,9 +68,6 @@ jobs:
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
 
-      - name: Install Make
-        run: choco install make
-
       - name: Clean previous build files
         run: if (Test-Path build_x86) { Remove-Item -Recurse -Force build_x86 }
 
@@ -78,25 +77,30 @@ jobs:
       - name: Build x86
         run: cmake --build ${{github.workspace}}/build_x86 --config ${{env.BUILD_TYPE}}
 
+      - name: Verify FFmpeg DLLs
+        run: |
+          echo "Checking for FFmpeg DLLs in build directory..."
+          ls ${{github.workspace}}/build_x86/Encore/Release/ | findstr /i "av\|sw"
+          if (Test-Path "${{github.workspace}}/build_x86/Encore/Release/avcodec*.dll") {
+            echo "✓ FFmpeg DLLs found"
+          } else {
+            echo "⚠ FFmpeg DLLs not found"
+            ls ${{github.workspace}}/build_x86/Encore/Release/
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: Encore_Win_x86-Indev
           path: ${{github.workspace}}/build_x86/Encore/Release/*
 
-      - name: Upload FFmpeg Logs
+      - name: Upload Build Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-logs
+          name: windows-x86-build-logs
           path: |
-            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_x86/**/*.log
+            ${{github.workspace}}/build_x86/Encore/CMakeFiles/*.log
 
   build-linux:
     runs-on: ubuntu-latest
@@ -119,6 +123,17 @@ jobs:
       - name: Build x64
         run: cmake --build ${{github.workspace}}/build_linux_x64 --config ${{env.BUILD_TYPE}}
 
+      - name: Verify FFmpeg Libraries
+        run: |
+          echo "Checking for FFmpeg shared libraries..."
+          ls ${{github.workspace}}/build_linux_x64/Encore/ | grep -E "(libav|libsw)" || echo "No FFmpeg libraries found"
+          if [ -f "${{github.workspace}}/build_linux_x64/Encore/libavcodec.so"* ]; then
+            echo "✓ FFmpeg libraries found"
+          else
+            echo "⚠ FFmpeg libraries not found"
+            ls -la ${{github.workspace}}/build_linux_x64/Encore/
+          fi
+
       - name: Remove CMake files x64
         working-directory: ${{github.workspace}}/build_linux_x64/Encore
         run: rm -r -f CMakeFiles Makefile cmake_install.cmake
@@ -128,20 +143,14 @@ jobs:
           name: Encore_Linux_x64-Indev
           path: ${{github.workspace}}/build_linux_x64/Encore/*
 
-      - name: Upload FFmpeg Logs
+      - name: Upload Build Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-logs
+          name: linux-build-logs
           path: |
-            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
+            ${{github.workspace}}/build_linux_x64/**/*.log
+            ${{github.workspace}}/build_linux_x64/Encore/CMakeFiles/*.log
 
   build-macos:
     runs-on: macos-latest
@@ -157,6 +166,17 @@ jobs:
 
       - name: Build
         run: cmake --build ${{github.workspace}}/build_macos --config ${{env.BUILD_TYPE}}
+
+      - name: Verify FFmpeg Libraries
+        run: |
+          echo "Checking for FFmpeg dylibs..."
+          ls ${{github.workspace}}/build_macos/Encore/ | grep -E "(libav|libsw)" || echo "No FFmpeg libraries found"
+          if [ -f "${{github.workspace}}/build_macos/Encore/libavcodec"*.dylib ]; then
+            echo "✓ FFmpeg libraries found"
+          else
+            echo "⚠ FFmpeg libraries not found"
+            ls -la ${{github.workspace}}/build_macos/Encore/
+          fi
 
       - name: Remove CMake files
         working-directory: ${{github.workspace}}/build_macos/Encore
@@ -175,26 +195,11 @@ jobs:
           name: Encore_macOS-Indev
           path: ${{github.workspace}}/Encore.dmg
 
-      - name: Upload FFmpeg Logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ffmpeg-logs
-          path: |
-            ${{github.workspace}}/build_x64/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x64/ffmpeg_build_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_configure_error.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_output.txt
-            ${{github.workspace}}/build_x86/ffmpeg_build_error.txt
-
       - name: Upload Build Logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-build-logs
+          name: macos-build-logs
           path: |
-            ${{github.workspace}}/build_linux_x64/**/*.log
-            ${{github.workspace}}/build_linux_x64/Encore/CMakeFiles/*.log
+            ${{github.workspace}}/build_macos/**/*.log
+            ${{github.workspace}}/build_macos/Encore/CMakeFiles/*.log
