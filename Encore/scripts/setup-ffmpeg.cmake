@@ -249,16 +249,41 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
         
         # Copy assets (Songs and Assets folders)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Encore/Songs"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Songs"
             "${TARGET_DIR}/Songs"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Encore/Assets"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Assets"
             "${TARGET_DIR}/Assets"
     )
     
     if(WIN32)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
-            # Copy FFmpeg DLLs
+            # Copy Discord RPC, BASS, and BASSOPUS DLLs based on architecture
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying Windows-specific libraries..."
+        )
+        
+        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+            # x86 libraries
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/discord-rpc/windows/x86/discord-rpc.dll"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/windows/x86/bass.dll"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/windows/x86/bassopus.dll"
+                    "${TARGET_DIR}/"
+            )
+        else()
+            # x64 libraries
+            add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/discord-rpc/windows/x64/discord-rpc.dll"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/windows/x64/bass.dll"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/windows/x64/bassopus.dll"
+                    "${TARGET_DIR}/"
+            )
+        endif()
+        
+        # Copy FFmpeg DLLs
+        add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${FFMPEG_BIN_DIR}"
                 "${TARGET_DIR}"
@@ -269,9 +294,9 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             # Copy Discord RPC, BASS, and BASSOPUS libraries
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/Encore/lib/discord-rpc/linux/x64/libdiscord-rpc.so"
-                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/linux/x86_64/libbass.so"
-                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/linux/x86_64/libbassopus.so"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/discord-rpc/linux/x64/libdiscord-rpc.so"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/linux/x86_64/libbass.so"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/linux/x86_64/libbassopus.so"
                 "${TARGET_DIR}/"
             
             # Copy FFmpeg shared libraries
@@ -291,9 +316,9 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             # Copy Discord RPC, BASS, and BASSOPUS libraries
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${CMAKE_SOURCE_DIR}/Encore/lib/discord-rpc/macos/libdiscord-rpc.dylib"
-                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/macos/libbass.dylib"
-                "${CMAKE_SOURCE_DIR}/Encore/lib/bass/macos/libbassopus.dylib"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/discord-rpc/macos/libdiscord-rpc.dylib"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/macos/libbass.dylib"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/macos/libbassopus.dylib"
                 "${TARGET_DIR}/"
             
             COMMENT "Copying macOS dependencies to output directory"
