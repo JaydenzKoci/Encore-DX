@@ -10,9 +10,11 @@ function(setup_ffmpeg)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
+            set(USE_PREBUILT_FFMPEG TRUE)
         else()
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
+            set(FFMPEG_PACKAGE "")
             set(PLATFORM_NAME "Windows x86")
+            set(USE_PREBUILT_FFMPEG FALSE)
         endif()
         set(ARCHIVE_EXT "zip")
         set(LIB_PREFIX "")
@@ -67,6 +69,10 @@ function(setup_ffmpeg)
         endforeach()
         
         message(FATAL_ERROR "FFmpeg not found on macOS. Please install via Homebrew: brew install ffmpeg")
+    elseif(WIN32 AND NOT USE_PREBUILT_FFMPEG)
+        # Build FFmpeg from source for Windows x86
+        message(STATUS "Building FFmpeg from source for ${PLATFORM_NAME}")
+        build_ffmpeg_from_source()
     else()
         set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
         set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
@@ -395,6 +401,82 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             )
         endif()
     endif()
+endfunction()
+
+# Function to build FFmpeg using vcpkg for Windows x86
+function(build_ffmpeg_from_source)
+    message(STATUS "Setting up FFmpeg build via vcpkg for Windows x86...")
+    
+    set(FFMPEG_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg")
+    
+    # Check if vcpkg is available
+    find_program(VCPKG_EXECUTABLE vcpkg HINTS 
+        "C:/vcpkg" 
+        "C:/tools/vcpkg" 
+        "${CMAKE_CURRENT_SOURCE_DIR}/../vcpkg"
+        ENV VCPKG_ROOT
+    )
+    
+    if(NOT VCPKG_EXECUTABLE)
+        message(STATUS "vcpkg not found, downloading and setting up...")
+        
+        # Download and setup vcpkg
+        include(FetchContent)
+        FetchContent_Declare(
+            vcpkg
+            GIT_REPOSITORY https://github.com/Microsoft/vcpkg.git
+            GIT_TAG master
+        )
+        
+        FetchContent_GetProperties(vcpkg)
+        if(NOT vcpkg_POPULATED)
+            FetchContent_MakeAvailable(vcpkg)
+            
+            # Bootstrap vcpkg
+            execute_process(
+                COMMAND ${vcpkg_SOURCE_DIR}/bootstrap-vcpkg.bat
+                WORKING_DIRECTORY ${vcpkg_SOURCE_DIR}
+                RESULT_VARIABLE BOOTSTRAP_RESULT
+            )
+            
+            if(NOT BOOTSTRAP_RESULT EQUAL 0)
+                message(FATAL_ERROR "vcpkg bootstrap failed")
+            endif()
+            
+            set(VCPKG_EXECUTABLE "${vcpkg_SOURCE_DIR}/vcpkg.exe")
+        endif()
+    endif()
+    
+    message(STATUS "Using vcpkg at: ${VCPKG_EXECUTABLE}")
+    
+    # Install FFmpeg for x86-windows
+    message(STATUS "Installing FFmpeg via vcpkg (this may take a while)...")
+    execute_process(
+        COMMAND ${VCPKG_EXECUTABLE} install ffmpeg[core,avcodec,avformat,avutil,swscale,swresample]:x86-windows
+        RESULT_VARIABLE VCPKG_RESULT
+        OUTPUT_VARIABLE VCPKG_OUTPUT
+        ERROR_VARIABLE VCPKG_ERROR
+    )
+    
+    if(NOT VCPKG_RESULT EQUAL 0)
+        message(STATUS "vcpkg output: ${VCPKG_OUTPUT}")
+        message(STATUS "vcpkg error: ${VCPKG_ERROR}")
+        message(FATAL_ERROR "vcpkg FFmpeg installation failed")
+    endif()
+    
+    # Find vcpkg installation directory
+    get_filename_component(VCPKG_ROOT ${VCPKG_EXECUTABLE} DIRECTORY)
+    set(VCPKG_INSTALLED_DIR "${VCPKG_ROOT}/installed/x86-windows")
+    
+    # Set the output variables
+    set(FFMPEG_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" PARENT_SCOPE)
+    set(FFMPEG_LIB_DIR "${VCPKG_INSTALLED_DIR}/lib" PARENT_SCOPE)
+    set(FFMPEG_BIN_DIR "${VCPKG_INSTALLED_DIR}/bin" PARENT_SCOPE)
+    
+    message(STATUS "FFmpeg build complete for Windows x86 via vcpkg")
+    message(STATUS "  Include dir: ${VCPKG_INSTALLED_DIR}/include")
+    message(STATUS "  Library dir: ${VCPKG_INSTALLED_DIR}/lib")
+    message(STATUS "  Binary dir: ${VCPKG_INSTALLED_DIR}/bin")
 endfunction()
 
 # Legacy function for backward compatibility
