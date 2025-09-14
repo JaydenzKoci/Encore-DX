@@ -99,37 +99,46 @@ endfunction()
 
 function(find_ffmpeg_libraries)
     if(APPLE)
+        # For macOS, search in the specified paths first, then allow default paths
         find_library(AVFORMAT_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avformat${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(AVCODEC_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avcodec${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(AVUTIL_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avutil${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(SWSCALE_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}swscale${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(SWRESAMPLE_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(AVFILTER_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(AVDEVICE_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avdevice${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
         find_library(POSTPROC_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}postproc${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
+            PATH_SUFFIXES lib
         )
     else()
         find_library(AVFORMAT_LIB 
@@ -174,7 +183,8 @@ function(find_ffmpeg_libraries)
         )
     endif()
 
-    if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
+    # Debug output for macOS
+    if(APPLE)
         message(STATUS "FFmpeg library search results:")
         message(STATUS "  AVFORMAT_LIB: ${AVFORMAT_LIB}")
         message(STATUS "  AVCODEC_LIB: ${AVCODEC_LIB}")
@@ -183,7 +193,52 @@ function(find_ffmpeg_libraries)
         message(STATUS "  FFMPEG_LIB_DIR: ${FFMPEG_LIB_DIR}")
         message(STATUS "  FFMPEG_LIB_PREFIX: ${FFMPEG_LIB_PREFIX}")
         message(STATUS "  FFMPEG_LIB_SUFFIX: ${FFMPEG_LIB_SUFFIX}")
-        message(FATAL_ERROR "Required FFmpeg libraries not found!")
+    endif()
+
+    if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
+        if(APPLE)
+            # Try using pkg-config as fallback for macOS
+            find_package(PkgConfig QUIET)
+            if(PKG_CONFIG_FOUND)
+                message(STATUS "Trying pkg-config as fallback...")
+                pkg_check_modules(PC_AVFORMAT QUIET libavformat)
+                pkg_check_modules(PC_AVCODEC QUIET libavcodec)
+                pkg_check_modules(PC_AVUTIL QUIET libavutil)
+                pkg_check_modules(PC_SWSCALE QUIET libswscale)
+                pkg_check_modules(PC_SWRESAMPLE QUIET libswresample)
+                pkg_check_modules(PC_AVFILTER QUIET libavfilter)
+                pkg_check_modules(PC_AVDEVICE QUIET libavdevice)
+                
+                if(PC_AVFORMAT_FOUND AND PC_AVCODEC_FOUND AND PC_AVUTIL_FOUND AND PC_SWSCALE_FOUND)
+                    set(AVFORMAT_LIB ${PC_AVFORMAT_LIBRARIES})
+                    set(AVCODEC_LIB ${PC_AVCODEC_LIBRARIES})
+                    set(AVUTIL_LIB ${PC_AVUTIL_LIBRARIES})
+                    set(SWSCALE_LIB ${PC_SWSCALE_LIBRARIES})
+                    if(PC_SWRESAMPLE_FOUND)
+                        set(SWRESAMPLE_LIB ${PC_SWRESAMPLE_LIBRARIES})
+                    endif()
+                    if(PC_AVFILTER_FOUND)
+                        set(AVFILTER_LIB ${PC_AVFILTER_LIBRARIES})
+                    endif()
+                    if(PC_AVDEVICE_FOUND)
+                        set(AVDEVICE_LIB ${PC_AVDEVICE_LIBRARIES})
+                    endif()
+                    message(STATUS "Found FFmpeg libraries via pkg-config")
+                endif()
+            endif()
+        endif()
+        
+        if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
+            message(STATUS "Final FFmpeg library search results:")
+            message(STATUS "  AVFORMAT_LIB: ${AVFORMAT_LIB}")
+            message(STATUS "  AVCODEC_LIB: ${AVCODEC_LIB}")
+            message(STATUS "  AVUTIL_LIB: ${AVUTIL_LIB}")
+            message(STATUS "  SWSCALE_LIB: ${SWSCALE_LIB}")
+            message(STATUS "  FFMPEG_LIB_DIR: ${FFMPEG_LIB_DIR}")
+            message(STATUS "  FFMPEG_LIB_PREFIX: ${FFMPEG_LIB_PREFIX}")
+            message(STATUS "  FFMPEG_LIB_SUFFIX: ${FFMPEG_LIB_SUFFIX}")
+            message(FATAL_ERROR "Required FFmpeg libraries not found!")
+        endif()
     endif()
 
     set(FFMPEG_LIBRARIES_LIST)
