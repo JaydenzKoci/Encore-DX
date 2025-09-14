@@ -11,7 +11,7 @@ function(setup_ffmpeg)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
         else()
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-winarm64-gpl-shared")
+            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
             set(PLATFORM_NAME "Windows x86")
         endif()
         set(ARCHIVE_EXT "zip")
@@ -98,7 +98,7 @@ function(setup_ffmpeg)
 endfunction()
 
 function(find_ffmpeg_libraries)
-    if(APPLE AND USE_SYSTEM_FFMPEG)
+    if(APPLE)
         find_library(AVFORMAT_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avformat${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
@@ -175,6 +175,14 @@ function(find_ffmpeg_libraries)
     endif()
 
     if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
+        message(STATUS "FFmpeg library search results:")
+        message(STATUS "  AVFORMAT_LIB: ${AVFORMAT_LIB}")
+        message(STATUS "  AVCODEC_LIB: ${AVCODEC_LIB}")
+        message(STATUS "  AVUTIL_LIB: ${AVUTIL_LIB}")
+        message(STATUS "  SWSCALE_LIB: ${SWSCALE_LIB}")
+        message(STATUS "  FFMPEG_LIB_DIR: ${FFMPEG_LIB_DIR}")
+        message(STATUS "  FFMPEG_LIB_PREFIX: ${FFMPEG_LIB_PREFIX}")
+        message(STATUS "  FFMPEG_LIB_SUFFIX: ${FFMPEG_LIB_SUFFIX}")
         message(FATAL_ERROR "Required FFmpeg libraries not found!")
     endif()
 

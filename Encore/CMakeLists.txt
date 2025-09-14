@@ -163,9 +163,37 @@ set(ENCORE_LIBRARIES
         ${DISCORD-RPC}
         ${FFMPEG_LIBRARIES}
 )
-if(UNIX)
+if(UNIX AND NOT APPLE)
   find_package(ZLIB REQUIRED)
   list(APPEND ENCORE_LIBRARIES ZLIB::ZLIB)
+endif()
+if(APPLE)
+  find_package(ZLIB REQUIRED)
+  list(APPEND ENCORE_LIBRARIES ZLIB::ZLIB)
+  
+  # Add macOS frameworks that FFmpeg depends on
+  find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
+  find_library(COREMEDIA_FRAMEWORK CoreMedia)
+  find_library(COREVIDEO_FRAMEWORK CoreVideo)
+  find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+  find_library(VIDEOTOOLBOX_FRAMEWORK VideoToolbox)
+  find_library(SECURITY_FRAMEWORK Security)
+  find_library(APPKIT_FRAMEWORK AppKit)
+  find_library(IOKIT_FRAMEWORK IOKit)
+  
+  list(APPEND ENCORE_LIBRARIES 
+    ${COREFOUNDATION_FRAMEWORK}
+    ${COREMEDIA_FRAMEWORK} 
+    ${COREVIDEO_FRAMEWORK}
+    ${AUDIOTOOLBOX_FRAMEWORK}
+    ${VIDEOTOOLBOX_FRAMEWORK}
+    ${SECURITY_FRAMEWORK}
+    ${APPKIT_FRAMEWORK}
+    ${IOKIT_FRAMEWORK}
+  )
+  
+  # Add additional system libraries that FFmpeg might need
+  list(APPEND ENCORE_LIBRARIES "-liconv" "-lbz2" "-llzma")
 endif()
 if(WIN32)
   list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
