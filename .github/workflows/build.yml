@@ -134,6 +134,9 @@ jobs:
         working-directory: ${{github.workspace}}/build_macos/Encore
         run: rm -r -f CMakeFiles Makefile cmake_install.cmake
 
+      - name: Make script executable
+        run: chmod +x ./create-macos-app.sh
+
       - name: Create .app Bundle
         working-directory: ${{github.workspace}}
         run: ./create-macos-app.sh
