@@ -383,9 +383,9 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
                 "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/linux/x86_64/libbassopus.so"
                 "${TARGET_DIR}/"
             
-            # Copy all FFmpeg .so files from lib directory
+            # Copy FFmpeg .so files using file(GLOB) in a custom script
             COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg .so files..."
-            COMMAND sh -c "cp '${FFMPEG_LIB_DIR}'/*.so* '${TARGET_DIR}/' 2>/dev/null || true"
+            COMMAND ${CMAKE_COMMAND} -E env FFMPEG_LIB_DIR=${FFMPEG_LIB_DIR} TARGET_DIR=${TARGET_DIR} ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy-ffmpeg-libs.cmake
             
             COMMENT "Copying Linux dependencies to output directory"
         )
@@ -404,7 +404,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
         if(FFMPEG_LIB_DIR)
             add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg libraries from ${FFMPEG_LIB_DIR}..."
-                COMMAND sh -c "cp '${FFMPEG_LIB_DIR}'/*.dylib '${TARGET_DIR}/' 2>/dev/null || true"
+                COMMAND ${CMAKE_COMMAND} -E env FFMPEG_LIB_DIR=${FFMPEG_LIB_DIR} TARGET_DIR=${TARGET_DIR} ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy-ffmpeg-libs-macos.cmake
                 COMMENT "Copying FFmpeg dylibs to output directory"
             )
         endif()
