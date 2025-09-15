@@ -7,27 +7,32 @@ function(setup_ffmpeg)
 
     if(WIN32)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+            # Windows x64: Download from BtbN
             set(FFMPEG_BASE_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest")
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
+            set(ARCHIVE_EXT "zip")
+            set(USE_DOWNLOAD TRUE)
         else()
-            set(FFMPEG_BASE_URL "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest")
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
+            # Windows x86: Use local files
+            set(FFMPEG_FOLDER "ffmpeg/windows/x86")
             set(PLATFORM_NAME "Windows x86")
+            set(USE_DOWNLOAD FALSE)
         endif()
-        set(ARCHIVE_EXT "zip")
         set(LIB_PREFIX "")
         set(LIB_SUFFIX ".lib")
         set(SHARED_SUFFIX ".dll")
     elseif(APPLE)
-        set(FFMPEG_BASE_URL "https://archive.org/download/zeranoe/macos64/shared")
-        set(FFMPEG_PACKAGE "ffmpeg-latest-macos64-shared")
+        # macOS: Use local files
+        set(FFMPEG_FOLDER "ffmpeg/macos")
         set(PLATFORM_NAME "macOS")
-        set(ARCHIVE_EXT "zip")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".dylib")
         set(SHARED_SUFFIX ".dylib")
+        set(USE_DOWNLOAD FALSE)
     elseif(UNIX)
+        # Linux: Download from BtbN
+        set(FFMPEG_BASE_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest")
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-linux64-gpl-shared")
             set(PLATFORM_NAME "Linux x64")
@@ -39,11 +44,13 @@ function(setup_ffmpeg)
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".so")
         set(SHARED_SUFFIX ".so")
+        set(USE_DOWNLOAD TRUE)
     endif()
     
     message(STATUS "Setting up FFmpeg for ${PLATFORM_NAME}")
 
-
+    if(USE_DOWNLOAD)
+        # Download FFmpeg prebuilt binaries
         set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
         set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
 
@@ -66,6 +73,22 @@ function(setup_ffmpeg)
         set(FFMPEG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include" PARENT_SCOPE)
         set(FFMPEG_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib" PARENT_SCOPE)
         set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/bin" PARENT_SCOPE)
+    else()
+        # Use local FFmpeg from lib folder
+        set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/${FFMPEG_FOLDER}")
+        
+        # Check if local FFmpeg exists
+        if(NOT EXISTS "${FFMPEG_LOCAL_DIR}")
+            message(FATAL_ERROR "FFmpeg not found at ${FFMPEG_LOCAL_DIR}. Please ensure FFmpeg is installed in the lib folder with the expected structure.")
+        endif()
+        
+        message(STATUS "Using local FFmpeg from: ${FFMPEG_LOCAL_DIR}")
+        
+        # Set the output variables to point to local FFmpeg
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_LOCAL_DIR}/include" PARENT_SCOPE)
+        set(FFMPEG_LIB_DIR "${FFMPEG_LOCAL_DIR}/lib" PARENT_SCOPE)
+        set(FFMPEG_BIN_DIR "${FFMPEG_LOCAL_DIR}/bin" PARENT_SCOPE)
+    endif()
     set(FFMPEG_LIB_PREFIX "${LIB_PREFIX}" PARENT_SCOPE)
     set(FFMPEG_LIB_SUFFIX "${LIB_SUFFIX}" PARENT_SCOPE)
     set(FFMPEG_SHARED_SUFFIX "${SHARED_SUFFIX}" PARENT_SCOPE)
@@ -168,6 +191,17 @@ function(find_ffmpeg_libraries)
         message(STATUS "  FFMPEG_LIB_DIR: ${FFMPEG_LIB_DIR}")
         message(STATUS "  FFMPEG_LIB_PREFIX: ${FFMPEG_LIB_PREFIX}")
         message(STATUS "  FFMPEG_LIB_SUFFIX: ${FFMPEG_LIB_SUFFIX}")
+        
+        # Debug: List what's actually in the lib directory
+        if(EXISTS ${FFMPEG_LIB_DIR})
+            file(GLOB LIB_FILES "${FFMPEG_LIB_DIR}/*")
+            message(STATUS "Files in FFMPEG_LIB_DIR:")
+            foreach(FILE ${LIB_FILES})
+                message(STATUS "    ${FILE}")
+            endforeach()
+        else()
+            message(STATUS "FFMPEG_LIB_DIR does not exist: ${FFMPEG_LIB_DIR}")
+        endif()
     endif()
 
     if(NOT AVFORMAT_LIB OR NOT AVCODEC_LIB OR NOT AVUTIL_LIB OR NOT SWSCALE_LIB)
@@ -320,7 +354,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             )
         endif()
         
-        # Copy FFmpeg DLLs
+        # Copy FFmpeg DLLs from local lib folder
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${FFMPEG_BIN_DIR}"
