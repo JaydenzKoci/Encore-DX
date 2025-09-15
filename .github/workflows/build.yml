@@ -124,9 +124,6 @@ jobs:
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
 
-      - name: Install FFmpeg
-        run: brew install ffmpeg
-
       - name: Configure CMake
         run: cmake -B ${{github.workspace}}/build_macos -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
