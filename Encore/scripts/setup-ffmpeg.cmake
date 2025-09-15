@@ -79,6 +79,12 @@ function(setup_ffmpeg)
         # Build FFmpeg from source for macOS
         message(STATUS "Building FFmpeg from source for ${PLATFORM_NAME}")
         build_ffmpeg_macos_from_source()
+        
+        # Set the output variables after building
+        set(FFMPEG_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg")
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_PREFIX}/include" PARENT_SCOPE)
+        set(FFMPEG_LIB_DIR "${FFMPEG_INSTALL_PREFIX}/lib" PARENT_SCOPE)
+        set(FFMPEG_BIN_DIR "${FFMPEG_INSTALL_PREFIX}/bin" PARENT_SCOPE)
     else()
         # Use local FFmpeg from lib folder
         set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/${FFMPEG_FOLDER}")
@@ -377,18 +383,9 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
                 "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/linux/x86_64/libbassopus.so"
                 "${TARGET_DIR}/"
             
-            # Copy only essential FFmpeg .so files (no executables or extra files)
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${FFMPEG_LIB_DIR}/libavformat.so"
-                "${FFMPEG_LIB_DIR}/libavcodec.so"
-                "${FFMPEG_LIB_DIR}/libavutil.so"
-                "${FFMPEG_LIB_DIR}/libswscale.so"
-                "${TARGET_DIR}/"
-            # Copy optional FFmpeg libraries if they exist
-            COMMAND ${CMAKE_COMMAND} -E echo "Copying optional FFmpeg libraries..."
-            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libswresample.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libswresample.so' '${TARGET_DIR}/' || true"
-            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libavfilter.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libavfilter.so' '${TARGET_DIR}/' || true"
-            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libavdevice.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libavdevice.so' '${TARGET_DIR}/' || true"
+            # Copy all FFmpeg .so files from lib directory
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg .so files..."
+            COMMAND find "${FFMPEG_LIB_DIR}" -name "*.so*" -exec ${CMAKE_COMMAND} -E copy_if_different {} "${TARGET_DIR}/" \\;
             
             COMMENT "Copying Linux dependencies to output directory"
         )
