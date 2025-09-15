@@ -385,7 +385,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             
             # Copy all FFmpeg .so files from lib directory
             COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg .so files..."
-            COMMAND sh -c "find '${FFMPEG_LIB_DIR}' -name '*.so*' -exec ${CMAKE_COMMAND} -E copy_if_different {} '${TARGET_DIR}/' \\;"
+            COMMAND sh -c "cp '${FFMPEG_LIB_DIR}'/*.so* '${TARGET_DIR}/' 2>/dev/null || true"
             
             COMMENT "Copying Linux dependencies to output directory"
         )
@@ -404,7 +404,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
         if(FFMPEG_LIB_DIR)
             add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg libraries from ${FFMPEG_LIB_DIR}..."
-                COMMAND bash -c "for lib in libavformat libavcodec libavutil libswscale libswresample libavfilter libavdevice; do if [ -f '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' ]; then ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' '${TARGET_DIR}/'; fi; done"
+                COMMAND sh -c "cp '${FFMPEG_LIB_DIR}'/*.dylib '${TARGET_DIR}/' 2>/dev/null || true"
                 COMMENT "Copying FFmpeg dylibs to output directory"
             )
         endif()
