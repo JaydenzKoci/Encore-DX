@@ -10,11 +10,9 @@ function(setup_ffmpeg)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
-            set(USE_PREBUILT_FFMPEG TRUE)
         else()
-            set(FFMPEG_PACKAGE "")
+            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x86")
-            set(USE_PREBUILT_FFMPEG FALSE)
         endif()
         set(ARCHIVE_EXT "zip")
         set(LIB_PREFIX "")
@@ -23,11 +21,12 @@ function(setup_ffmpeg)
     elseif(APPLE)
         set(FFMPEG_PACKAGE "")
         set(PLATFORM_NAME "macOS")
-        set(ARCHIVE_EXT "")
+        set(ARCHIVE_EXT "tar.gz")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".dylib")
         set(SHARED_SUFFIX ".dylib")
-        set(USE_SYSTEM_FFMPEG TRUE)
+        set(USE_SYSTEM_FFMPEG FALSE)
+        set(USE_CUSTOM_PREBUILT TRUE)
     elseif(UNIX)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-linux64-gpl-shared")
@@ -44,7 +43,11 @@ function(setup_ffmpeg)
     
     message(STATUS "Setting up FFmpeg for ${PLATFORM_NAME}")
 
-    if(APPLE)
+    if(APPLE AND USE_CUSTOM_PREBUILT)
+        # Use custom prebuilt FFmpeg for macOS
+        message(STATUS "Using custom prebuilt FFmpeg for ${PLATFORM_NAME}")
+        download_custom_ffmpeg_prebuilt("macos")
+    elseif(APPLE)
         find_package(PkgConfig QUIET)
         if(PKG_CONFIG_FOUND)
             pkg_check_modules(FFMPEG QUIET libavformat libavcodec libavutil libswscale)
@@ -69,10 +72,7 @@ function(setup_ffmpeg)
         endforeach()
         
         message(FATAL_ERROR "FFmpeg not found on macOS. Please install via Homebrew: brew install ffmpeg")
-    elseif(WIN32 AND NOT USE_PREBUILT_FFMPEG)
-        # Build FFmpeg from source for Windows x86
-        message(STATUS "Building FFmpeg from source for ${PLATFORM_NAME}")
-        build_ffmpeg_from_source()
+
     else()
         set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
         set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
@@ -403,7 +403,49 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
     endif()
 endfunction()
 
-# Function to build FFmpeg using vcpkg for Windows x86
+# Function to download custom prebuilt FFmpeg packages
+function(download_custom_ffmpeg_prebuilt PLATFORM)
+    message(STATUS "Downloading custom prebuilt FFmpeg for ${PLATFORM}...")
+    
+    # Set URLs for prebuilt packages
+    if(PLATFORM STREQUAL "windows-x86")
+        # Use Zeranoe FFmpeg builds or similar
+        set(FFMPEG_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win32-gpl-shared.zip")
+        set(ARCHIVE_EXT "zip")
+    elseif(PLATFORM STREQUAL "macos")
+        # Use your own prebuilt package or build from Homebrew
+        set(FFMPEG_URL "https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/ffmpeg-prebuilt/ffmpeg-macos.tar.gz")
+        set(ARCHIVE_EXT "tar.gz")
+    else()
+        message(FATAL_ERROR "Unknown platform for custom prebuilt FFmpeg: ${PLATFORM}")
+    endif()
+    
+    set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg")
+    
+    include(FetchContent)
+    FetchContent_Declare(
+        ffmpeg_custom_prebuilt
+        URL ${FFMPEG_URL}
+        DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    )
+    
+    FetchContent_GetProperties(ffmpeg_custom_prebuilt)
+    if(NOT ffmpeg_custom_prebuilt_POPULATED)
+        message(STATUS "Downloading custom prebuilt FFmpeg...")
+        FetchContent_MakeAvailable(ffmpeg_custom_prebuilt)
+        
+        # Copy to standard location
+        file(COPY ${ffmpeg_custom_prebuilt_SOURCE_DIR}/ DESTINATION ${FFMPEG_INSTALL_DIR})
+        message(STATUS "Custom prebuilt FFmpeg setup complete for ${PLATFORM}")
+    endif()
+    
+    # Set the output variables
+    set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_DIR}/include" PARENT_SCOPE)
+    set(FFMPEG_LIB_DIR "${FFMPEG_INSTALL_DIR}/lib" PARENT_SCOPE)
+    set(FFMPEG_BIN_DIR "${FFMPEG_INSTALL_DIR}/bin" PARENT_SCOPE)
+endfunction()
+
+# Function to build FFmpeg using vcpkg for Windows x86 (fallback)
 function(build_ffmpeg_from_source)
     message(STATUS "Setting up FFmpeg build via vcpkg for Windows x86...")
     
@@ -449,10 +491,21 @@ function(build_ffmpeg_from_source)
     
     message(STATUS "Using vcpkg at: ${VCPKG_EXECUTABLE}")
     
+    # First, check what FFmpeg features are available
+    message(STATUS "Checking available FFmpeg features...")
+    execute_process(
+        COMMAND ${VCPKG_EXECUTABLE} search ffmpeg
+        RESULT_VARIABLE SEARCH_RESULT
+        OUTPUT_VARIABLE SEARCH_OUTPUT
+        ERROR_VARIABLE SEARCH_ERROR
+    )
+    
+    message(STATUS "Available FFmpeg packages: ${SEARCH_OUTPUT}")
+    
     # Install FFmpeg for x86-windows
     message(STATUS "Installing FFmpeg via vcpkg (this may take a while)...")
     execute_process(
-        COMMAND ${VCPKG_EXECUTABLE} install ffmpeg[core,avcodec,avformat,avutil,swscale,swresample]:x86-windows
+        COMMAND ${VCPKG_EXECUTABLE} install ffmpeg:x86-windows
         RESULT_VARIABLE VCPKG_RESULT
         OUTPUT_VARIABLE VCPKG_OUTPUT
         ERROR_VARIABLE VCPKG_ERROR
@@ -461,7 +514,27 @@ function(build_ffmpeg_from_source)
     if(NOT VCPKG_RESULT EQUAL 0)
         message(STATUS "vcpkg output: ${VCPKG_OUTPUT}")
         message(STATUS "vcpkg error: ${VCPKG_ERROR}")
-        message(FATAL_ERROR "vcpkg FFmpeg installation failed")
+        
+        # Try to update vcpkg and retry
+        message(STATUS "Trying to update vcpkg and retry...")
+        execute_process(
+            COMMAND ${VCPKG_EXECUTABLE} update
+            RESULT_VARIABLE UPDATE_RESULT
+        )
+        
+        # Retry installation
+        execute_process(
+            COMMAND ${VCPKG_EXECUTABLE} install ffmpeg:x86-windows
+            RESULT_VARIABLE RETRY_RESULT
+            OUTPUT_VARIABLE RETRY_OUTPUT
+            ERROR_VARIABLE RETRY_ERROR
+        )
+        
+        if(NOT RETRY_RESULT EQUAL 0)
+            message(STATUS "Retry output: ${RETRY_OUTPUT}")
+            message(STATUS "Retry error: ${RETRY_ERROR}")
+            message(FATAL_ERROR "vcpkg FFmpeg installation failed after retry")
+        endif()
     endif()
     
     # Find vcpkg installation directory
