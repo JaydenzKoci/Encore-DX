@@ -201,6 +201,10 @@ endif()
 if(UNIX AND NOT APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-fatal-warnings")
 endif()
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+  # Disable SAFESEH for Windows x86 builds to fix FFmpeg linking issues
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")
+endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
 

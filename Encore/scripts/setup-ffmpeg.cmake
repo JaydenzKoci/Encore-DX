@@ -25,13 +25,13 @@ function(setup_ffmpeg)
         set(LIB_SUFFIX ".lib")
         set(SHARED_SUFFIX ".dll")
     elseif(APPLE)
-        # macOS: Use local files (BtbN doesn't provide macOS builds)
-        set(FFMPEG_FOLDER "ffmpeg/macos")
+        # macOS: Build FFmpeg from source with shared libraries
         set(PLATFORM_NAME "macOS")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".dylib")
         set(SHARED_SUFFIX ".dylib")
         set(USE_DOWNLOAD FALSE)
+        set(BUILD_FROM_SOURCE TRUE)
     elseif(UNIX)
         # Linux: Download from BtbN
         set(FFMPEG_BASE_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest")
@@ -75,6 +75,10 @@ function(setup_ffmpeg)
         set(FFMPEG_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/include" PARENT_SCOPE)
         set(FFMPEG_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib" PARENT_SCOPE)
         set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/bin" PARENT_SCOPE)
+    elseif(BUILD_FROM_SOURCE)
+        # Build FFmpeg from source for macOS
+        message(STATUS "Building FFmpeg from source for ${PLATFORM_NAME}")
+        build_ffmpeg_macos_from_source()
     else()
         # Use local FFmpeg from lib folder
         set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/${FFMPEG_FOLDER}")
@@ -374,7 +378,17 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
                 "${TARGET_DIR}/"
             
             # Copy only essential FFmpeg .so files (no executables or extra files)
-            COMMAND bash -c "for lib in libavformat libavcodec libavutil libswscale libswresample libavfilter libavdevice; do if [ -f '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' ]; then ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' '${TARGET_DIR}/'; fi; done"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${FFMPEG_LIB_DIR}/libavformat.so"
+                "${FFMPEG_LIB_DIR}/libavcodec.so"
+                "${FFMPEG_LIB_DIR}/libavutil.so"
+                "${FFMPEG_LIB_DIR}/libswscale.so"
+                "${TARGET_DIR}/"
+            # Copy optional FFmpeg libraries if they exist
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying optional FFmpeg libraries..."
+            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libswresample.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libswresample.so' '${TARGET_DIR}/' || true"
+            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libavfilter.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libavfilter.so' '${TARGET_DIR}/' || true"
+            COMMAND bash -c "[ -f '${FFMPEG_LIB_DIR}/libavdevice.so' ] && ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/libavdevice.so' '${TARGET_DIR}/' || true"
             
             COMMENT "Copying Linux dependencies to output directory"
         )
@@ -547,6 +561,98 @@ function(build_ffmpeg_from_source)
     message(STATUS "  Include dir: ${VCPKG_INSTALLED_DIR}/include")
     message(STATUS "  Library dir: ${VCPKG_INSTALLED_DIR}/lib")
     message(STATUS "  Binary dir: ${VCPKG_INSTALLED_DIR}/bin")
+endfunction()
+
+# Function to build FFmpeg from source for macOS with shared libraries
+function(build_ffmpeg_macos_from_source)
+    message(STATUS "Setting up FFmpeg source build for macOS...")
+    
+    set(FFMPEG_SOURCE_URL "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n6.1.1.tar.gz")
+    set(FFMPEG_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg")
+    
+    include(FetchContent)
+    FetchContent_Declare(
+        ffmpeg_source_macos
+        URL ${FFMPEG_SOURCE_URL}
+        DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    )
+    
+    FetchContent_GetProperties(ffmpeg_source_macos)
+    if(NOT ffmpeg_source_macos_POPULATED)
+        message(STATUS "Downloading FFmpeg source code...")
+        FetchContent_MakeAvailable(ffmpeg_source_macos)
+        
+        # Configure FFmpeg build for macOS with shared libraries
+        message(STATUS "Configuring FFmpeg build for macOS...")
+        
+        # Configure FFmpeg with minimal features and shared libraries
+        execute_process(
+            COMMAND ./configure
+                --prefix=${FFMPEG_INSTALL_PREFIX}
+                --enable-shared
+                --disable-static
+                --disable-programs
+                --disable-doc
+                --disable-network
+                --disable-devices
+                --disable-filters
+                --enable-filter=scale
+                --disable-encoders
+                --disable-muxers
+                --disable-protocols
+                --enable-protocol=file
+                --disable-bsfs
+                --disable-indevs
+                --disable-outdevs
+                --disable-debug
+                --enable-optimizations
+            WORKING_DIRECTORY ${ffmpeg_source_macos_SOURCE_DIR}
+            RESULT_VARIABLE CONFIGURE_RESULT
+            OUTPUT_VARIABLE CONFIGURE_OUTPUT
+            ERROR_VARIABLE CONFIGURE_ERROR
+        )
+        
+        if(NOT CONFIGURE_RESULT EQUAL 0)
+            message(STATUS "FFmpeg configure output: ${CONFIGURE_OUTPUT}")
+            message(STATUS "FFmpeg configure error: ${CONFIGURE_ERROR}")
+            message(FATAL_ERROR "FFmpeg configure failed")
+        endif()
+        
+        # Build FFmpeg
+        message(STATUS "Building FFmpeg (this may take a while)...")
+        execute_process(
+            COMMAND make -j4
+            WORKING_DIRECTORY ${ffmpeg_source_macos_SOURCE_DIR}
+            RESULT_VARIABLE BUILD_RESULT
+            OUTPUT_VARIABLE BUILD_OUTPUT
+            ERROR_VARIABLE BUILD_ERROR
+        )
+        
+        if(NOT BUILD_RESULT EQUAL 0)
+            message(STATUS "FFmpeg build output: ${BUILD_OUTPUT}")
+            message(STATUS "FFmpeg build error: ${BUILD_ERROR}")
+            message(FATAL_ERROR "FFmpeg build failed")
+        endif()
+        
+        # Install FFmpeg
+        message(STATUS "Installing FFmpeg...")
+        execute_process(
+            COMMAND make install
+            WORKING_DIRECTORY ${ffmpeg_source_macos_SOURCE_DIR}
+            RESULT_VARIABLE INSTALL_RESULT
+        )
+        
+        if(NOT INSTALL_RESULT EQUAL 0)
+            message(FATAL_ERROR "FFmpeg install failed")
+        endif()
+        
+        message(STATUS "FFmpeg build complete for macOS")
+    endif()
+    
+    # Set the output variables
+    set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_PREFIX}/include" PARENT_SCOPE)
+    set(FFMPEG_LIB_DIR "${FFMPEG_INSTALL_PREFIX}/lib" PARENT_SCOPE)
+    set(FFMPEG_BIN_DIR "${FFMPEG_INSTALL_PREFIX}/bin" PARENT_SCOPE)
 endfunction()
 
 # Legacy function for backward compatibility
