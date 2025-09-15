@@ -14,16 +14,18 @@ function(setup_ffmpeg)
             set(ARCHIVE_EXT "zip")
             set(USE_DOWNLOAD TRUE)
         else()
-            # Windows x86: Use local files
-            set(FFMPEG_FOLDER "ffmpeg/windows/x86")
+            # Windows x86: Download from yt-dlp (revert back to downloads)
+            set(FFMPEG_BASE_URL "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest")
+            set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
             set(PLATFORM_NAME "Windows x86")
-            set(USE_DOWNLOAD FALSE)
+            set(ARCHIVE_EXT "zip")
+            set(USE_DOWNLOAD TRUE)
         endif()
         set(LIB_PREFIX "")
         set(LIB_SUFFIX ".lib")
         set(SHARED_SUFFIX ".dll")
     elseif(APPLE)
-        # macOS: Use local files
+        # macOS: Use local files (BtbN doesn't provide macOS builds)
         set(FFMPEG_FOLDER "ffmpeg/macos")
         set(PLATFORM_NAME "macOS")
         set(LIB_PREFIX "lib")
@@ -371,16 +373,8 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
                 "${CMAKE_CURRENT_SOURCE_DIR}/lib/bass/linux/x86_64/libbassopus.so"
                 "${TARGET_DIR}/"
             
-            # Copy FFmpeg shared libraries
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${FFMPEG_LIB_DIR}/libavformat${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libavcodec${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libavutil${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libswscale${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libswresample${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libavfilter${FFMPEG_SHARED_SUFFIX}*
-                ${FFMPEG_LIB_DIR}/libavdevice${FFMPEG_SHARED_SUFFIX}*
-                "${TARGET_DIR}/"
+            # Copy only essential FFmpeg .so files (no executables or extra files)
+            COMMAND bash -c "for lib in libavformat libavcodec libavutil libswscale libswresample libavfilter libavdevice; do if [ -f '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' ]; then ${CMAKE_COMMAND} -E copy_if_different '${FFMPEG_LIB_DIR}/$lib${FFMPEG_SHARED_SUFFIX}' '${TARGET_DIR}/'; fi; done"
             
             COMMENT "Copying Linux dependencies to output directory"
         )
