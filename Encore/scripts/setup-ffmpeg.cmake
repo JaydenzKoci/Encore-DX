@@ -604,6 +604,7 @@ function(build_ffmpeg_macos_from_source)
                 --disable-indevs
                 --disable-outdevs
                 --disable-debug
+                --disable-x86asm
                 --enable-optimizations
                 --extra-cflags=-arch\ x86_64
                 --extra-ldflags=-arch\ x86_64
