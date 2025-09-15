@@ -385,7 +385,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             
             # Copy all FFmpeg .so files from lib directory
             COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg .so files..."
-            COMMAND find "${FFMPEG_LIB_DIR}" -name "*.so*" -exec ${CMAKE_COMMAND} -E copy_if_different {} "${TARGET_DIR}/" \\;
+            COMMAND sh -c "find '${FFMPEG_LIB_DIR}' -name '*.so*' -exec ${CMAKE_COMMAND} -E copy_if_different {} '${TARGET_DIR}/' \\;"
             
             COMMENT "Copying Linux dependencies to output directory"
         )
@@ -582,10 +582,12 @@ function(build_ffmpeg_macos_from_source)
         # Configure FFmpeg build for macOS with shared libraries
         message(STATUS "Configuring FFmpeg build for macOS...")
         
-        # Configure FFmpeg with minimal features and shared libraries
+        # Configure FFmpeg with minimal features and shared libraries for x86_64
         execute_process(
             COMMAND ./configure
                 --prefix=${FFMPEG_INSTALL_PREFIX}
+                --arch=x86_64
+                --target-os=darwin
                 --enable-shared
                 --disable-static
                 --disable-programs
@@ -603,6 +605,8 @@ function(build_ffmpeg_macos_from_source)
                 --disable-outdevs
                 --disable-debug
                 --enable-optimizations
+                --extra-cflags=-arch\ x86_64
+                --extra-ldflags=-arch\ x86_64
             WORKING_DIRECTORY ${ffmpeg_source_macos_SOURCE_DIR}
             RESULT_VARIABLE CONFIGURE_RESULT
             OUTPUT_VARIABLE CONFIGURE_OUTPUT
