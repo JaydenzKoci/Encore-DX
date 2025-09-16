@@ -6,19 +6,30 @@ set(FFMPEG_LIB_DIR "$ENV{FFMPEG_LIB_DIR}")
 set(TARGET_DIR "$ENV{TARGET_DIR}")
 
 if(FFMPEG_LIB_DIR AND TARGET_DIR)
-    # Find all .so files in the FFmpeg lib directory
-    file(GLOB FFMPEG_SO_FILES "${FFMPEG_LIB_DIR}/*.so*")
+    # Define the specific FFmpeg libraries we want (base .so files only, no versioned ones)
+    set(FFMPEG_LIBS
+        "libavcodec.so"
+        "libavformat.so"
+        "libavutil.so"
+        "libswscale.so"
+        "libswresample.so"
+        "libavfilter.so"
+        "libavdevice.so"
+    )
     
-    if(FFMPEG_SO_FILES)
-        message(STATUS "Copying ${list(LENGTH FFMPEG_SO_FILES)} FFmpeg .so files...")
-        foreach(SO_FILE ${FFMPEG_SO_FILES})
-            get_filename_component(FILENAME ${SO_FILE} NAME)
-            message(STATUS "  Copying ${FILENAME}")
-            file(COPY ${SO_FILE} DESTINATION ${TARGET_DIR})
-        endforeach()
-    else()
-        message(STATUS "No FFmpeg .so files found in ${FFMPEG_LIB_DIR}")
-    endif()
+    set(COPIED_COUNT 0)
+    foreach(LIB_NAME ${FFMPEG_LIBS})
+        set(LIB_PATH "${FFMPEG_LIB_DIR}/${LIB_NAME}")
+        if(EXISTS ${LIB_PATH})
+            message(STATUS "  Copying ${LIB_NAME}")
+            file(COPY ${LIB_PATH} DESTINATION ${TARGET_DIR})
+            math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
+        else()
+            message(STATUS "  Skipping ${LIB_NAME} (not found)")
+        endif()
+    endforeach()
+    
+    message(STATUS "Copied ${COPIED_COUNT} FFmpeg .so files (base versions only)")
 else()
     message(STATUS "FFMPEG_LIB_DIR or TARGET_DIR not set")
 endif()
