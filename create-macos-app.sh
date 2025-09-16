@@ -10,11 +10,11 @@ mkdir out
 cp -r Encore.app_template out/Encore.app
 
 # Copy the game assets into the Resources folder
-cp -r build_macos/Encore/Assets out/Encore.app/Contents/Resources
+cp -r build_macos/Encore/Release/Assets out/Encore.app/Contents/Resources
 
 # Copy out the game executable and any used dynamic libraries
-cp build_macos/Encore/Encore out/Encore.app/Contents/MacOS/Encore
-cp build_macos/Encore/*.dylib out/Encore.app/Contents/MacOS
+cp build_macos/Encore/Release/Encore out/Encore.app/Contents/MacOS/Encore
+cp build_macos/Encore/Release/*.dylib out/Encore.app/Contents/MacOS
 
 # Fix executable so dynamic libraries work from the executable path
 install_name_tool -add_rpath @executable_path out/Encore.app/Contents/MacOS/Encore
@@ -26,7 +26,7 @@ rm out/Encore.app/Contents/MacOS/.gitkeep
 codesign --force --deep -s - out/Encore.app
 
 # Copy out the Songs folder
-cp -r build_macos/Encore/Songs out/Songs
+cp -r build_macos/Encore/Release/Songs out/Songs
 
 # -- !! TEMPORARY INDEV HACK !! --
 # not anymore, but keeping just in case
