@@ -20,8 +20,13 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     endif()
     
     # Copy everything from local lib folder instead of FFmpeg download
-    set(LOCAL_FFMPEG_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/ffmpeg/linux/lib")
+    # Use CMAKE_SOURCE_DIR to get the root project directory
+    set(LOCAL_FFMPEG_LIB_DIR "${CMAKE_SOURCE_DIR}/Encore/lib/ffmpeg/linux/lib")
     message(STATUS "Using local FFmpeg libraries from: ${LOCAL_FFMPEG_LIB_DIR}")
+    
+    # Debug: Show what CMAKE_SOURCE_DIR and CMAKE_CURRENT_SOURCE_DIR are
+    message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+    message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
     
     if(EXISTS ${LOCAL_FFMPEG_LIB_DIR})
         file(GLOB LOCAL_SO_FILES "${LOCAL_FFMPEG_LIB_DIR}/*.so*")
