@@ -13,6 +13,8 @@
 #include <queue>
 #include <condition_variable>
 
+#include "settings.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
