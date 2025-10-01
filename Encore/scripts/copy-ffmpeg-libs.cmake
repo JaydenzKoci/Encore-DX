@@ -258,20 +258,16 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     message(STATUS "Creating comprehensive symlinks for dependency resolution...")
     
     # Create additional symlinks that might be needed (excluding swresample)
-    set(SYMLINK_MAPPINGS
-        "libavutil.so;libavutil.so.60"
-        "libavcodec.so;libavcodec.so.62"
-        "libavformat.so;libavformat.so.62"
-        "libswscale.so;libswscale.so.9"
-        "libavfilter.so;libavfilter.so.11"
-        "libavdevice.so;libavdevice.so.62"
-    )
+    # Define as pairs: symlink_name -> target_name
+    set(SYMLINK_NAMES "libavutil.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libavfilter.so" "libavdevice.so")
+    set(TARGET_NAMES "libavutil.so.60" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
     
-    foreach(MAPPING ${SYMLINK_MAPPINGS})
-        string(REPLACE ";" "," MAPPING_COMMA ${MAPPING})
-        string(REPLACE "," ";" MAPPING_LIST ${MAPPING_COMMA})
-        list(GET MAPPING_LIST 0 SYMLINK_NAME)
-        list(GET MAPPING_LIST 1 TARGET_NAME)
+    list(LENGTH SYMLINK_NAMES NUM_MAPPINGS)
+    math(EXPR LAST_INDEX "${NUM_MAPPINGS} - 1")
+    
+    foreach(INDEX RANGE ${LAST_INDEX})
+        list(GET SYMLINK_NAMES ${INDEX} SYMLINK_NAME)
+        list(GET TARGET_NAMES ${INDEX} TARGET_NAME)
         
         set(SYMLINK_PATH "${TARGET_DIR}/${SYMLINK_NAME}")
         set(TARGET_PATH "${TARGET_DIR}/${TARGET_NAME}")
