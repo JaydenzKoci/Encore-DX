@@ -19,7 +19,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         message(STATUS "FFmpeg lib directory does not exist!")
     endif()
     
-    # Copy only major version .so files (like libname.so.6, not libname.so.6.0.100 or libname.so)
+    # Copy both major version files AND base symlinks from source
     file(GLOB ALL_SO_FILES "${FFMPEG_LIB_DIR}/*.so*")
     
     # Special check for swresample files
@@ -34,22 +34,30 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     foreach(LIB_FILE ${ALL_SO_FILES})
         get_filename_component(LIB_NAME ${LIB_FILE} NAME)
         
-        # Check if this is a major version file (ends with .so.X where X is a single number)
+        # Copy major version files (ends with .so.X where X is a single number)
         if(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$")
             message(STATUS "  Copying major version: ${LIB_NAME}")
-            
-            # Use configure_file instead of file(COPY) for better error handling
             configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
             
-            # Verify the file was copied successfully
             if(EXISTS "${TARGET_DIR}/${LIB_NAME}")
                 message(STATUS "    ✓ Successfully copied to ${TARGET_DIR}/${LIB_NAME}")
                 math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
             else()
                 message(STATUS "    ✗ Failed to copy ${LIB_NAME}")
             endif()
+        # Also copy base .so files (symlinks) from source
+        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE})
+            message(STATUS "  Copying base symlink: ${LIB_NAME}")
+            configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
+            
+            if(EXISTS "${TARGET_DIR}/${LIB_NAME}")
+                message(STATUS "    ✓ Successfully copied symlink ${LIB_NAME}")
+                math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
+            else()
+                message(STATUS "    ✗ Failed to copy symlink ${LIB_NAME}")
+            endif()
         else()
-            message(STATUS "  Skipping: ${LIB_NAME} (not a major version)")
+            message(STATUS "  Skipping: ${LIB_NAME} (not needed)")
         endif()
     endforeach()
     
@@ -108,9 +116,27 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
+    # Verify specific files exist
+    message(STATUS "Verifying critical files:")
+    set(CRITICAL_FILES "libavutil.so.60" "libswresample.so.6")
+    foreach(CRITICAL_FILE ${CRITICAL_FILES})
+        if(EXISTS "${TARGET_DIR}/${CRITICAL_FILE}")
+            message(STATUS "  ✓ ${CRITICAL_FILE} exists")
+            # Check file permissions
+            execute_process(
+                COMMAND ls -la ${TARGET_DIR}/${CRITICAL_FILE}
+                OUTPUT_VARIABLE LS_OUTPUT
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+            )
+            message(STATUS "    Permissions: ${LS_OUTPUT}")
+        else()
+            message(STATUS "  ✗ ${CRITICAL_FILE} missing!")
+        endif()
+    endforeach()
+    
     # Check dependencies of libswresample specifically
     find_program(LDD_PROGRAM ldd)
-    if(LDD_PROGRAM)
+    if(LDD_PROGRAM AND EXISTS "${TARGET_DIR}/libswresample.so.6")
         message(STATUS "Checking dependencies of libswresample.so.6:")
         execute_process(
             COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libswresample.so.6
@@ -126,44 +152,65 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
             message(STATUS "ldd failed: ${LDD_ERROR}")
         endif()
         
-        # Also check libavcodec for comparison
-        message(STATUS "Checking dependencies of libavcodec.so.62 for comparison:")
+        # Test if we can load libavutil directly
+        message(STATUS "Testing direct access to libavutil.so.60:")
         execute_process(
-            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libavcodec.so.62
-            OUTPUT_VARIABLE LDD_OUTPUT2
-            ERROR_VARIABLE LDD_ERROR2
-            RESULT_VARIABLE LDD_RESULT2
+            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libavutil.so.60
+            OUTPUT_VARIABLE LDD_AVUTIL_OUTPUT
+            ERROR_VARIABLE LDD_AVUTIL_ERROR
+            RESULT_VARIABLE LDD_AVUTIL_RESULT
         )
-        if(LDD_RESULT2 EQUAL 0)
-            message(STATUS "Dependencies:")
-            string(REPLACE "\n" "\n  " LDD_FORMATTED2 "  ${LDD_OUTPUT2}")
-            message(STATUS "${LDD_FORMATTED2}")
+        if(LDD_AVUTIL_RESULT EQUAL 0)
+            message(STATUS "libavutil.so.60 dependencies:")
+            string(REPLACE "\n" "\n  " LDD_AVUTIL_FORMATTED "  ${LDD_AVUTIL_OUTPUT}")
+            message(STATUS "${LDD_AVUTIL_FORMATTED}")
+        else()
+            message(STATUS "ldd on libavutil.so.60 failed: ${LDD_AVUTIL_ERROR}")
         endif()
     else()
-        message(STATUS "ldd not found, cannot check dependencies")
+        message(STATUS "ldd not found or libswresample.so.6 missing, cannot check dependencies")
     endif()
     
     # Fix RPATH on all copied libraries to ensure they can find each other
     find_program(PATCHELF_PROGRAM patchelf)
-    if(PATCHELF_PROGRAM)
+    find_program(CHRPATH_PROGRAM chrpath)
+    
+    if(PATCHELF_PROGRAM OR CHRPATH_PROGRAM)
         message(STATUS "Fixing RPATH on copied libraries...")
-        file(GLOB COPIED_LIBS "${TARGET_DIR}/lib*.so.[0-9]*")
+        file(GLOB COPIED_LIBS "${TARGET_DIR}/lib*.so*")
         foreach(LIB_FILE ${COPIED_LIBS})
             get_filename_component(LIB_NAME ${LIB_FILE} NAME)
-            message(STATUS "  Setting RPATH on ${LIB_NAME}")
-            execute_process(
-                COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN' ${LIB_FILE}
-                RESULT_VARIABLE PATCHELF_RESULT
-                OUTPUT_QUIET
-                ERROR_QUIET
-            )
-            if(NOT PATCHELF_RESULT EQUAL 0)
-                message(STATUS "    Warning: Failed to set RPATH on ${LIB_NAME}")
+            
+            # Skip symlinks for RPATH modification
+            if(NOT IS_SYMLINK ${LIB_FILE})
+                message(STATUS "  Setting RPATH on ${LIB_NAME}")
+                
+                if(PATCHELF_PROGRAM)
+                    execute_process(
+                        COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN:$ORIGIN/..' ${LIB_FILE}
+                        RESULT_VARIABLE RPATH_RESULT
+                        OUTPUT_QUIET
+                        ERROR_QUIET
+                    )
+                elseif(CHRPATH_PROGRAM)
+                    execute_process(
+                        COMMAND ${CHRPATH_PROGRAM} -r '$ORIGIN:$ORIGIN/..' ${LIB_FILE}
+                        RESULT_VARIABLE RPATH_RESULT
+                        OUTPUT_QUIET
+                        ERROR_QUIET
+                    )
+                endif()
+                
+                if(NOT RPATH_RESULT EQUAL 0)
+                    message(STATUS "    Warning: Failed to set RPATH on ${LIB_NAME}")
+                else()
+                    message(STATUS "    ✓ RPATH set successfully on ${LIB_NAME}")
+                endif()
             endif()
         endforeach()
     else()
-        message(STATUS "patchelf not found, cannot fix library RPATH")
-        message(STATUS "Consider installing patchelf for better library compatibility")
+        message(STATUS "Neither patchelf nor chrpath found")
+        message(STATUS "Install patchelf or chrpath for better library compatibility")
     endif()
     
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
