@@ -14,6 +14,7 @@
 #include "gameplay/enctime.h"
 #include "OvershellMenu.h"
 #include "util/settings-text.h"
+#include "util/file_dialog.h"
 
 bool ShowGameplaySettings = true;
 
@@ -83,7 +84,7 @@ void SettingsGameplay::Draw() {
         // custom video background
         {
             "Custom Video Background",
-            "Set a custom video file to use as the background during gameplay. Leave empty to use default backgrounds."
+            "Set a custom video file to override all song backgrounds during gameplay.\n\nSupported formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM\n\nClick 'Browse' to select a file or enter the full path manually.\n\nLeave empty to use default song backgrounds."
         }
     };
 
@@ -267,9 +268,16 @@ void SettingsGameplay::Draw() {
     
     // Browse button
     if (GuiButton(browseButtonRect, "Browse")) {
-        // For now, show a simple message. In a full implementation, you'd open a file dialog
-        TraceLog(LOG_INFO, "Browse button clicked. Please enter the full path to your video file in the text box.");
-        editingVideoPath = true;
+        std::string selectedFile = Encore::FileDialog::OpenVideoFile();
+        if (!selectedFile.empty() && Encore::FileDialog::IsValidVideoFile(selectedFile)) {
+            strncpy(videoPathBuffer, selectedFile.c_str(), sizeof(videoPathBuffer) - 1);
+            videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
+            TheGameSettings.CustomVideoBackgroundPath = selectedFile;
+            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TraceLog(LOG_INFO, "Selected video file: %s", selectedFile.c_str());
+        } else if (!selectedFile.empty()) {
+            TraceLog(LOG_WARNING, "Selected file is not a valid video file: %s", selectedFile.c_str());
+        }
     }
     
     // Clear button
