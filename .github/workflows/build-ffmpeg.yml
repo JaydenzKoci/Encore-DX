@@ -1,0 +1,323 @@
+name: Build FFmpeg Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg_version:
+        description: 'FFmpeg version to build'
+        required: true
+        default: '6.1.1'
+        type: string
+  push:
+    paths:
+      - '.github/workflows/build-ffmpeg.yml'
+    branches:
+      - main
+
+env:
+  FFMPEG_VERSION: ${{ inputs.ffmpeg_version || '6.1.1' }}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x86, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW${{ matrix.arch == 'x64' && '64' || '32' }}
+          install: >-
+            mingw-w64-${{ matrix.arch == 'x64' && 'x86_64' || 'i686' }}-gcc
+            mingw-w64-${{ matrix.arch == 'x64' && 'x86_64' || 'i686' }}-pkg-config
+            mingw-w64-${{ matrix.arch == 'x64' && 'x86_64' || 'i686' }}-nasm
+            make
+            diffutils
+
+      - name: Download FFmpeg source
+        shell: msys2 {0}
+        run: |
+          curl -L "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${{ env.FFMPEG_VERSION }}.tar.gz" -o ffmpeg.tar.gz
+          tar -xzf ffmpeg.tar.gz
+          mv FFmpeg-n${{ env.FFMPEG_VERSION }} ffmpeg-source
+
+      - name: Configure FFmpeg
+        shell: msys2 {0}
+        run: |
+          cd ffmpeg-source
+          ./configure \
+            --prefix=../ffmpeg-windows-${{ matrix.arch }} \
+            --arch=${{ matrix.arch == 'x64' && 'x86_64' || 'i686' }} \
+            --target-os=mingw32 \
+            --cross-prefix=${{ matrix.arch == 'x64' && 'x86_64' || 'i686' }}-w64-mingw32- \
+            --enable-cross-compile \
+            --enable-shared \
+            --disable-static \
+            --disable-programs \
+            --disable-doc \
+            --disable-network \
+            --disable-devices \
+            --disable-filters \
+            --enable-filter=scale \
+            --disable-encoders \
+            --disable-muxers \
+            --disable-protocols \
+            --enable-protocol=file \
+            --disable-bsfs \
+            --disable-indevs \
+            --disable-outdevs \
+            --disable-debug \
+            --enable-optimizations \
+            --enable-runtime-cpudetect
+
+      - name: Build FFmpeg
+        shell: msys2 {0}
+        run: |
+          cd ffmpeg-source
+          make -j$(nproc)
+          make install
+
+      - name: Package Windows FFmpeg
+        shell: bash
+        run: |
+          mkdir -p ffmpeg-artifacts/windows/${{ matrix.arch }}
+          cp -r ffmpeg-windows-${{ matrix.arch }}/* ffmpeg-artifacts/windows/${{ matrix.arch }}/
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-${{ matrix.arch }}
+          path: ffmpeg-artifacts/windows/${{ matrix.arch }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.arch }}" = "x86" ]; then
+            sudo dpkg --add-architecture i386
+            sudo apt-get update
+            sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386
+            sudo apt-get install -y nasm pkg-config
+          else
+            sudo apt-get install -y build-essential nasm pkg-config
+          fi
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${{ env.FFMPEG_VERSION }}.tar.gz" -o ffmpeg.tar.gz
+          tar -xzf ffmpeg.tar.gz
+          mv FFmpeg-n${{ env.FFMPEG_VERSION }} ffmpeg-source
+
+      - name: Configure FFmpeg
+        run: |
+          cd ffmpeg-source
+          if [ "${{ matrix.arch }}" = "x86" ]; then
+            export CC="gcc -m32"
+            export CXX="g++ -m32"
+            ARCH_FLAGS="--arch=i686 --target-os=linux --extra-cflags=-m32 --extra-ldflags=-m32"
+          else
+            ARCH_FLAGS="--arch=x86_64 --target-os=linux"
+          fi
+          
+          ./configure \
+            --prefix=../ffmpeg-linux-${{ matrix.arch }} \
+            $ARCH_FLAGS \
+            --enable-shared \
+            --disable-static \
+            --disable-programs \
+            --disable-doc \
+            --disable-network \
+            --disable-devices \
+            --disable-filters \
+            --enable-filter=scale \
+            --disable-encoders \
+            --disable-muxers \
+            --disable-protocols \
+            --enable-protocol=file \
+            --disable-bsfs \
+            --disable-indevs \
+            --disable-outdevs \
+            --disable-debug \
+            --enable-optimizations \
+            --enable-runtime-cpudetect
+
+      - name: Build FFmpeg
+        run: |
+          cd ffmpeg-source
+          make -j$(nproc)
+          make install
+
+      - name: Package Linux FFmpeg
+        run: |
+          mkdir -p ffmpeg-artifacts/linux/${{ matrix.arch }}
+          cp -r ffmpeg-linux-${{ matrix.arch }}/* ffmpeg-artifacts/linux/${{ matrix.arch }}/
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux-${{ matrix.arch }}
+          path: ffmpeg-artifacts/linux/${{ matrix.arch }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install nasm pkg-config
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n${{ env.FFMPEG_VERSION }}.tar.gz" -o ffmpeg.tar.gz
+          tar -xzf ffmpeg.tar.gz
+          mv FFmpeg-n${{ env.FFMPEG_VERSION }} ffmpeg-source
+
+      - name: Configure FFmpeg
+        run: |
+          cd ffmpeg-source
+          ./configure \
+            --prefix=../ffmpeg-macos \
+            --arch=x86_64 \
+            --target-os=darwin \
+            --enable-shared \
+            --disable-static \
+            --disable-programs \
+            --disable-doc \
+            --disable-network \
+            --disable-devices \
+            --disable-filters \
+            --enable-filter=scale \
+            --disable-encoders \
+            --disable-muxers \
+            --disable-protocols \
+            --enable-protocol=file \
+            --disable-bsfs \
+            --disable-indevs \
+            --disable-outdevs \
+            --disable-debug \
+            --enable-optimizations \
+            --extra-cflags="-arch x86_64" \
+            --extra-ldflags="-arch x86_64"
+
+      - name: Build FFmpeg
+        run: |
+          cd ffmpeg-source
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Package macOS FFmpeg
+        run: |
+          mkdir -p ffmpeg-artifacts/macos
+          cp -r ffmpeg-macos/* ffmpeg-artifacts/macos/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos
+          path: ffmpeg-artifacts/macos
+
+  package-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ffmpeg-artifacts
+
+      - name: Create release structure
+        run: |
+          mkdir -p ffmpeg-release/windows/x86
+          mkdir -p ffmpeg-release/windows/x64
+          mkdir -p ffmpeg-release/linux/x86
+          mkdir -p ffmpeg-release/linux/x64
+          mkdir -p ffmpeg-release/macos
+          
+          # Copy Windows builds
+          cp -r ffmpeg-artifacts/ffmpeg-windows-x86/* ffmpeg-release/windows/x86/
+          cp -r ffmpeg-artifacts/ffmpeg-windows-x64/* ffmpeg-release/windows/x64/
+          
+          # Copy Linux builds
+          cp -r ffmpeg-artifacts/ffmpeg-linux-x86/* ffmpeg-release/linux/x86/
+          cp -r ffmpeg-artifacts/ffmpeg-linux-x64/* ffmpeg-release/linux/x64/
+          
+          # Copy macOS build
+          cp -r ffmpeg-artifacts/ffmpeg-macos/* ffmpeg-release/macos/
+
+      - name: Create version info
+        run: |
+          echo "FFmpeg Version: ${{ env.FFMPEG_VERSION }}" > ffmpeg-release/VERSION.txt
+          echo "Build Date: $(date -u)" >> ffmpeg-release/VERSION.txt
+          echo "Platforms: Windows (x86, x64), Linux (x86, x64), macOS (x64)" >> ffmpeg-release/VERSION.txt
+          echo "" >> ffmpeg-release/VERSION.txt
+          echo "Libraries included:" >> ffmpeg-release/VERSION.txt
+          echo "- libavcodec" >> ffmpeg-release/VERSION.txt
+          echo "- libavformat" >> ffmpeg-release/VERSION.txt
+          echo "- libavutil" >> ffmpeg-release/VERSION.txt
+          echo "- libswscale" >> ffmpeg-release/VERSION.txt
+          echo "- libswresample" >> ffmpeg-release/VERSION.txt
+          echo "- libavfilter" >> ffmpeg-release/VERSION.txt
+          echo "- libavdevice" >> ffmpeg-release/VERSION.txt
+
+      - name: Create ZIP archive
+        run: |
+          cd ffmpeg-release
+          zip -r ../ffmpeg-${{ env.FFMPEG_VERSION }}-all-platforms.zip .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ env.FFMPEG_VERSION }}-all-platforms
+          path: ffmpeg-${{ env.FFMPEG_VERSION }}-all-platforms.zip
+
+      - name: Create Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ffmpeg-${{ env.FFMPEG_VERSION }}
+          name: FFmpeg ${{ env.FFMPEG_VERSION }} - All Platforms
+          body: |
+            Custom FFmpeg build for Encore project
+            
+            **Version:** ${{ env.FFMPEG_VERSION }}
+            **Platforms:** Windows (x86, x64), Linux (x86, x64), macOS (x64)
+            
+            **Libraries included:**
+            - libavcodec (video/audio codecs)
+            - libavformat (container formats)
+            - libavutil (utility functions)
+            - libswscale (video scaling)
+            - libswresample (audio resampling)
+            - libavfilter (filtering)
+            - libavdevice (device access)
+            
+            **Configuration:**
+            - Shared libraries only
+            - Minimal build (no programs, docs, or unnecessary features)
+            - Optimized for runtime performance
+            - File protocol support only
+            - Scale filter enabled
+            
+            Extract the ZIP file and use the appropriate platform folder in your build.
+          files: ffmpeg-${{ env.FFMPEG_VERSION }}-all-platforms.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

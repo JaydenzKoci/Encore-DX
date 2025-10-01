@@ -34,11 +34,8 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     foreach(LIB_FILE ${ALL_SO_FILES})
         get_filename_component(LIB_NAME ${LIB_FILE} NAME)
         
-        # Skip swresample files entirely
-        if(LIB_NAME MATCHES "libswresample")
-            message(STATUS "  Skipping: ${LIB_NAME} (swresample excluded)")
         # Copy major version files (ends with .so.X where X is a single number)
-        elseif(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$")
+        if(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$")
             message(STATUS "  Copying major version: ${LIB_NAME}")
             configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
             
@@ -48,8 +45,8 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
             else()
                 message(STATUS "    ✗ Failed to copy ${LIB_NAME}")
             endif()
-        # Also copy base .so files (symlinks) from source, but not swresample
-        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE} AND NOT LIB_NAME MATCHES "libswresample")
+        # Also copy base .so files (symlinks) from source
+        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE})
             message(STATUS "  Copying base symlink: ${LIB_NAME}")
             configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
             
@@ -209,8 +206,8 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     
     # Create additional symlinks that might be needed (excluding swresample)
     # Define as pairs: symlink_name -> target_name
-    set(SYMLINK_NAMES "libavutil.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libavfilter.so" "libavdevice.so")
-    set(TARGET_NAMES "libavutil.so.60" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
+    set(SYMLINK_NAMES "libavutil.so" "libswresample.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libavfilter.so" "libavdevice.so")
+    set(TARGET_NAMES "libavutil.so.60" "libswresample.so.6" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
     
     list(LENGTH SYMLINK_NAMES NUM_MAPPINGS)
     math(EXPR LAST_INDEX "${NUM_MAPPINGS} - 1")
