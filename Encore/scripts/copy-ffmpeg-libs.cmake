@@ -19,53 +19,40 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         message(STATUS "FFmpeg lib directory does not exist!")
     endif()
     
-    # Copy both major version files AND base symlinks from source
-    file(GLOB ALL_SO_FILES "${FFMPEG_LIB_DIR}/*.so*")
+    # Copy everything from local lib folder instead of FFmpeg download
+    set(LOCAL_FFMPEG_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/ffmpeg/linux/lib")
+    message(STATUS "Using local FFmpeg libraries from: ${LOCAL_FFMPEG_LIB_DIR}")
     
-    # Special check for swresample files
-    file(GLOB SWRESAMPLE_FILES "${FFMPEG_LIB_DIR}/libswresample*")
-    message(STATUS "Swresample files found:")
-    foreach(FILE ${SWRESAMPLE_FILES})
-        get_filename_component(FILENAME ${FILE} NAME)
-        message(STATUS "  - ${FILENAME}")
-    endforeach()
-    
-    set(COPIED_COUNT 0)
-    foreach(LIB_FILE ${ALL_SO_FILES})
-        get_filename_component(LIB_NAME ${LIB_FILE} NAME)
+    if(EXISTS ${LOCAL_FFMPEG_LIB_DIR})
+        file(GLOB LOCAL_SO_FILES "${LOCAL_FFMPEG_LIB_DIR}/*.so*")
+        message(STATUS "Local FFmpeg files found:")
+        foreach(FILE ${LOCAL_SO_FILES})
+            get_filename_component(FILENAME ${FILE} NAME)
+            message(STATUS "  - ${FILENAME}")
+        endforeach()
         
-        # Copy major version files (ends with .so.X where X is a single number)
-        # Skip libswresample.so.6 since we use local libswresample.so.4
-        if(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$" AND NOT LIB_NAME MATCHES "libswresample\\.so\\.[0-9]+")
-            message(STATUS "  Copying major version: ${LIB_NAME}")
-            configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
+        set(COPIED_COUNT 0)
+        foreach(LIB_FILE ${LOCAL_SO_FILES})
+            get_filename_component(LIB_NAME ${LIB_FILE} NAME)
             
-            if(EXISTS "${TARGET_DIR}/${LIB_NAME}")
-                message(STATUS "    ✓ Successfully copied to ${TARGET_DIR}/${LIB_NAME}")
-                math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
+            # Copy all .so files from local directory
+            if(LIB_NAME MATCHES "^lib.*\\.so.*$")
+                message(STATUS "  Copying local file: ${LIB_NAME}")
+                configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
+                
+                if(EXISTS "${TARGET_DIR}/${LIB_NAME}")
+                    message(STATUS "    ✓ Successfully copied to ${TARGET_DIR}/${LIB_NAME}")
+                    math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
+                else()
+                    message(STATUS "    ✗ Failed to copy ${LIB_NAME}")
+                endif()
             else()
-                message(STATUS "    ✗ Failed to copy ${LIB_NAME}")
+                message(STATUS "  Skipping: ${LIB_NAME} (not a library file)")
             endif()
-        elseif(LIB_NAME MATCHES "libswresample\\.so\\.[0-9]+")
-            message(STATUS "  Skipping: ${LIB_NAME} (using local libswresample.so.4 instead)")
-        # Also copy base .so files (symlinks) from source
-        # Skip libswresample.so since we create our own symlink to libswresample.so.4
-        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE} AND NOT LIB_NAME MATCHES "libswresample\\.so")
-            message(STATUS "  Copying base symlink: ${LIB_NAME}")
-            configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
-            
-            if(EXISTS "${TARGET_DIR}/${LIB_NAME}")
-                message(STATUS "    ✓ Successfully copied symlink ${LIB_NAME}")
-                math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
-            else()
-                message(STATUS "    ✗ Failed to copy symlink ${LIB_NAME}")
-            endif()
-        elseif(LIB_NAME MATCHES "libswresample\\.so$")
-            message(STATUS "  Skipping: ${LIB_NAME} (will create our own symlink to libswresample.so.4)")
-        else()
-            message(STATUS "  Skipping: ${LIB_NAME} (not needed)")
-        endif()
-    endforeach()
+        endforeach()
+    else()
+        message(FATAL_ERROR "Local FFmpeg lib directory not found: ${LOCAL_FFMPEG_LIB_DIR}")
+    endif()
     
     # Create base symlinks for major version libraries
     # This ensures libname.so -> libname.so.X for proper dynamic linking
@@ -121,14 +108,17 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    # Verify critical files exist
-    message(STATUS "Verifying critical files:")
-    set(CRITICAL_FILES "libavutil.so.60" "libswresample.so.4" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9")
-    foreach(CRITICAL_FILE ${CRITICAL_FILES})
-        if(EXISTS "${TARGET_DIR}/${CRITICAL_FILE}")
-            message(STATUS "  ✓ ${CRITICAL_FILE} exists")
+    # Verify critical library types exist (any version)
+    message(STATUS "Verifying critical library types exist:")
+    set(CRITICAL_LIB_TYPES "libavutil" "libswresample" "libavcodec" "libavformat" "libswscale")
+    foreach(LIB_TYPE ${CRITICAL_LIB_TYPES})
+        file(GLOB LIB_FILES "${TARGET_DIR}/${LIB_TYPE}.so*")
+        if(LIB_FILES)
+            list(GET LIB_FILES 0 FIRST_FILE)
+            get_filename_component(FILENAME ${FIRST_FILE} NAME)
+            message(STATUS "  ✓ ${LIB_TYPE} found: ${FILENAME}")
         else()
-            message(STATUS "  ✗ ${CRITICAL_FILE} missing!")
+            message(STATUS "  ✗ ${LIB_TYPE} missing!")
         endif()
     endforeach()
     
@@ -162,6 +152,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
                     message(STATUS "    Warning: Failed to set RPATH")
                 endif()
                 
+
 
             endif()
         endforeach()
@@ -265,36 +256,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endif()
     
-    # Special handling: Copy libswresample.so.4 from local lib directory
-    set(LOCAL_SWRESAMPLE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/ffmpeg/linux/lib/libswresample.so.4")
-    if(EXISTS ${LOCAL_SWRESAMPLE_PATH})
-        message(STATUS "Copying local libswresample.so.4 from lib directory...")
-        configure_file(${LOCAL_SWRESAMPLE_PATH} ${TARGET_DIR}/libswresample.so.4 COPYONLY)
-        
-        if(EXISTS "${TARGET_DIR}/libswresample.so.4")
-            message(STATUS "  ✓ Successfully copied libswresample.so.4 from local lib")
-            math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
-            
-            # Create symlink libswresample.so -> libswresample.so.4
-            if(NOT EXISTS "${TARGET_DIR}/libswresample.so")
-                message(STATUS "  Creating symlink: libswresample.so -> libswresample.so.4")
-                execute_process(
-                    COMMAND ${CMAKE_COMMAND} -E create_symlink libswresample.so.4 libswresample.so
-                    WORKING_DIRECTORY ${TARGET_DIR}
-                    RESULT_VARIABLE SYMLINK_RESULT
-                )
-                if(SYMLINK_RESULT EQUAL 0)
-                    message(STATUS "    ✓ Symlink created successfully")
-                else()
-                    message(STATUS "    ✗ Failed to create symlink")
-                endif()
-            endif()
-        else()
-            message(STATUS "  ✗ Failed to copy libswresample.so.4 from local lib")
-        endif()
-    else()
-        message(STATUS "Warning: Local libswresample.so.4 not found at ${LOCAL_SWRESAMPLE_PATH}")
-    endif()
+
     
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
 else()
