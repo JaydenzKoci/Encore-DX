@@ -18,6 +18,7 @@ float lineDistance = 1.5f;
 #include "rlgl.h"
 #include "easing/easing.h"
 #include "song/audio.h"
+#include "settings.h"
 #include "users/playerManager.h"
 #include "util/enclog.h"
 #include "util/raylib-3d-text.h"
@@ -725,7 +726,7 @@ void gameplayRenderer::RenderClassicNotes(
     PlayerGameplayStats *&stats = player.stats;
 
     double HighwayEnd = length + (smasherPos * 4);
-    if (player.BrutalMode) {
+    if (player.BrutalMode && TheGameSettings.ShowHealthBar) {
         Vector3 BeatlinePos =
             Vector3 { 0, 0, HealthToBrutalPosition(stats->Health, HighwayEnd) };
         DrawModelEx(gprAssets.beatline, BeatlinePos, { 0 }, 0, { 1, 1, 4 }, WHITE);
@@ -772,7 +773,7 @@ void gameplayRenderer::RenderClassicNotes(
 
         bool BrutalSkip = false;
         if (NoteStartPositionWorld < HealthToBrutalPosition(stats->Health, HighwayEnd)
-            && player.BrutalMode) {
+            && player.BrutalMode && TheGameSettings.ShowHealthBar) {
             BrutalSkip = true;
         }
 
@@ -869,7 +870,7 @@ void gameplayRenderer::RenderClassicNotes(
                 }
 
                 if (!SkipShit) {
-                    if (BrutalSkip) {
+                    if (BrutalSkip && TheGameSettings.ShowHealthBar) {
                         NoteStartPositionWorld =
                             HealthToBrutalPosition(stats->Health, HighwayEnd);
                     }
@@ -1309,18 +1310,21 @@ void gameplayRenderer::RenderGameplay(Player &player, double curSongTime, Song s
     float TempHealthBarHeight =
         Remap(ThePlayerManager.BandStats->Health, 0, 100.0f, 0, GetScreenHeight());
 
-    DrawRectangle(
-        gprU.hpct(0.0f), 0, 10, gprU.hinpct(ThePlayerManager.BandStats->Health), GREEN
-    );
+    extern Encore::Settings TheGameSettings;
+    if (TheGameSettings.ShowHealthBar) {
+        DrawRectangle(
+            gprU.hpct(0.0f), 0, 10, gprU.hinpct(ThePlayerManager.BandStats->Health), GREEN
+        );
 
-    DrawTextEx(
-        gprAssets.rubik,
-        TextFormat("%4.2f", ThePlayerManager.BandStats->Health),
-        { 0, 0 },
-        32,
-        0,
-        WHITE
-    );
+        DrawTextEx(
+            gprAssets.rubik,
+            TextFormat("%4.2f", ThePlayerManager.BandStats->Health),
+            { 0, 0 },
+            32,
+            0,
+            WHITE
+        );
+    }
 }
 
 void gameplayRenderer::DrawHighwayMesh(

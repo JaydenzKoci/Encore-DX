@@ -8,11 +8,17 @@
 #include "uuid.h"
 #include "song/scoring.h"
 #include "song/song.h"
+#include "settings.h"
 
 #include <random>
 #include <nlohmann/json.hpp>
 
 void PlayerGameplayStats::AddHealth() {
+    extern Encore::Settings TheGameSettings;
+    if (!TheGameSettings.ShowHealthBar) {
+        return;
+    }
+    
     if (Overdrive) {
         Health += (healthGainPerNote * healthOverdriveGainMult);
     } else {
@@ -25,6 +31,11 @@ void PlayerGameplayStats::AddHealth() {
 }
 
 void PlayerGameplayStats::LoseHealth() {
+    extern Encore::Settings TheGameSettings;
+    if (!TheGameSettings.ShowHealthBar) {
+        return;
+    }
+    
     Health -= healthLossPerNote;
 
     if (Health < 0.0f)
@@ -315,7 +326,9 @@ void Player::ResetGameplayStats() {
     stats->NotesHit = 0;
     stats->NotesMissed = 0;
     stats->PerfectHit = 0;
-    stats->Health = 100.0f;
+    
+    extern Encore::Settings TheGameSettings;
+    stats->Health = TheGameSettings.ShowHealthBar ? 100.0f : 100.0f;
 
     stats->uvOffsetX = 0;
     stats->uvOffsetY = 0;

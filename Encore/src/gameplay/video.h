@@ -150,7 +150,20 @@ public:
     }
 
     void Update() {
-        if (!isLoaded || !isPlaying) return;
+        if (!isLoaded) return;
+        
+        if (delayedStart) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - playStartTime).count();
+            if (elapsed >= startDelayMs) {
+                isPlaying = true;
+                delayedStart = false;
+            } else {
+                return;
+            }
+        }
+        
+        if (!isPlaying) return;
 
         frameTimer += GetFrameTime();
         double frameDuration = (fps > 0) ? (1.0 / fps) : 0.033;
@@ -200,17 +213,47 @@ public:
         }
     }
 
-    void Play() { if (isLoaded) isPlaying = true; }
-    void Pause() { if (isLoaded) isPlaying = false; }
-    void Resume() { Play(); }
+    void Play() { 
+        if (isLoaded) {
+            isPlaying = true;
+            startDelayMs = 0.0;
+            playStartTime = std::chrono::steady_clock::now();
+        }
+    }
+    void PlayWithDelay(double delayMs) {
+        if (isLoaded) {
+            startDelayMs = delayMs;
+            playStartTime = std::chrono::steady_clock::now();
+            isPlaying = false;
+            delayedStart = true;
+        }
+    }
+    void Pause() { 
+        if (isLoaded) {
+            isPlaying = false;
+            delayedStart = false;
+        }
+    }
+    void Resume() { 
+        if (isLoaded) {
+            if (startDelayMs > 0.0) {
+                PlayWithDelay(startDelayMs);
+            } else {
+                Play();
+            }
+        }
+    }
     void Stop() {
         if (isLoaded) {
             isPlaying = false;
+            delayedStart = false;
             std::lock_guard<std::mutex> lock(seekMutex);
             seekRequest = true;
+            seekToTime = 0.0;
             frameQueueCond.notify_all();
         }
     }
+
     bool IsLoaded() const { return isLoaded; }
 
 private:
@@ -222,7 +265,13 @@ private:
             {
                 std::lock_guard<std::mutex> lock(seekMutex);
                 if (seekRequest) {
-                    av_seek_frame(pFormatCtx, videoStreamIndex, 0, AVSEEK_FLAG_BACKWARD);
+                    // Convert time to timestamp
+                    int64_t timestamp = (int64_t)(seekToTime * AV_TIME_BASE);
+                    if (pFormatCtx->streams[videoStreamIndex]->time_base.den != 0) {
+                        timestamp = av_rescale_q(timestamp, AV_TIME_BASE_Q, pFormatCtx->streams[videoStreamIndex]->time_base);
+                    }
+                    
+                    av_seek_frame(pFormatCtx, videoStreamIndex, timestamp, AVSEEK_FLAG_BACKWARD);
                     avcodec_flush_buffers(pCodecCtx);
 
                     std::lock_guard<std::mutex> queueLock(queueMutex);
@@ -289,6 +338,10 @@ private:
     std::mutex seekMutex;
     std::atomic<bool> seekRequest{false};
     std::atomic<bool> stopDecoder{false};
+    double seekToTime = 0.0;
+    double startDelayMs = 0.0;
+    std::chrono::steady_clock::time_point playStartTime;
+    std::atomic<bool> delayedStart{false};
 
     int width = 0, height = 0;
     int display_width = 0, display_height = 0;

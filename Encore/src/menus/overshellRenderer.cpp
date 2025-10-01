@@ -10,6 +10,7 @@
 #include "gameMenu.h"
 #include "styles.h"
 #include "users/playerManager.h"
+#include "settings.h"
 
 /// std::vector<bool> SlotSelectingState = { false, false, false, false };
 /// std::vector<bool> OpenState = { false, false, false, false };

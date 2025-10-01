@@ -3,3 +3,12 @@
 //
 
 #include "gameplayHudRenderer.h"
+#include "settings.h"
+
+void gameplayHudRenderer::RenderHud() {
+    extern Encore::Settings TheGameSettings;
+    if (!TheGameSettings.ShowHealthBar) {
+        return;
+    }
+    
+}

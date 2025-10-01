@@ -156,6 +156,10 @@ void GameMenu::DrawAlbumArtBackground(Texture2D song) {
 };
 
 void GameMenu::DrawVersion() {
+    if (TheGameSettings.HideVersionInfo) {
+        return;
+    }
+    
     DrawTextEx(
         menuAss.josefinSansItalic,
         TextFormat(
@@ -612,6 +616,10 @@ bool AlbumArtLoadingStuff = false;
 // sentenced to
 
 void GameMenu::DrawFPS(int posX, int posY) {
+    if (TheGameSettings.HideFPSCounter) {
+        return;
+    }
+    
     Color color = LIME; // Good FPS
     int fps = GetFPS();
 

@@ -208,6 +208,7 @@ public:
     int hopoThreshold = 170;
     bool ini = false;
     float previewStartTime = 0.0f;
+    int videoStartTime = 0;
 
     std::vector<BPM> bpms {};
     std::vector<TimeSig> timesigs {};
@@ -428,6 +429,9 @@ public:
             }
             if (document.HasMember("preview_start_time") && document["preview_start_time"].IsInt()) {
                 previewStartTime = static_cast<float>(document["preview_start_time"].GetInt());
+            }
+            if (document.HasMember("video_start_time") && document["video_start_time"].IsInt()) {
+                videoStartTime = document["video_start_time"].GetInt();
             }
         }
         if (document.HasMember("stems") && document["stems"].IsObject()) {

@@ -309,22 +309,56 @@ void GameplayMenu::DrawScorebox(Units &u, Assets &assets, float scoreY) {
     Rectangle scoreboxSrc {
         0, 0, float(assets.Scorebox.width), float(assets.Scorebox.height)
     };
+    extern Encore::Settings TheGameSettings;
     float WidthOfScorebox = u.hinpct(0.28);
-    float ScoreboxX = u.RightSide;
-    float ScoreboxY = u.hpct(0.1425f);
     float HeightOfScorebox = WidthOfScorebox / 4;
+    
+    float hudOffsetX = 0.0f;
+    float hudOffsetY = 0.0f;
+    
+    switch (TheGameSettings.HUDPosition) {
+        case 0:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 1:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 2:
+            hudOffsetX = 0.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        case 3:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        default:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+    }
+    
+    float ScoreboxX = u.RightSide + hudOffsetX;
+    float ScoreboxY = u.hpct(0.1425f) + hudOffsetY;
+    
     Rectangle scoreboxDraw { ScoreboxX, ScoreboxY, WidthOfScorebox, HeightOfScorebox };
+    Vector2 origin = Vector2{WidthOfScorebox, 0};
     DrawTexturePro(
-        assets.Scorebox, scoreboxSrc, scoreboxDraw, { WidthOfScorebox, 0 }, 0, WHITE
+        assets.Scorebox, scoreboxSrc, scoreboxDraw, origin, 0, WHITE
     );
+    
+    Vector2 textPos = { ScoreboxX - u.winpct(0.0145f), scoreY + u.hinpct(0.0025) };
+    int textAlign = RIGHT;
+    
     GameMenu::mhDrawText(
         assets.redHatMono,
         GameMenu::scoreCommaFormatter(ThePlayerManager.BandStats->Score),
-        { u.RightSide - u.winpct(0.0145f), scoreY + u.hinpct(0.0025) },
+        textPos,
         u.hinpct(0.05),
         Color { 107, 161, 222, 255 },
         assets.sdfShader,
-        RIGHT
+        textAlign
     );
 }
 
@@ -332,25 +366,59 @@ void GameplayMenu::DrawTimerbox(Units &u, Assets &assets, float scoreY) {
     Rectangle TimerboxSrc {
         0, 0, float(assets.Timerbox.width), float(assets.Timerbox.height)
     };
+    extern Encore::Settings TheGameSettings;
     float WidthOfTimerbox = u.hinpct(0.14);
-    float TimerboxX = u.RightSide;
-    float TimerboxY = u.hpct(0.1425f);
     float HeightOfTimerbox = WidthOfTimerbox / 4;
+    
+    float hudOffsetX = 0.0f;
+    float hudOffsetY = 0.0f;
+    
+    switch (TheGameSettings.HUDPosition) {
+        case 0:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 1:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 2:
+            hudOffsetX = 0.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        case 3:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        default:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+    }
+    
+    float TimerboxX = u.RightSide + hudOffsetX;
+    float TimerboxY = u.hpct(0.1425f) + hudOffsetY;
+    
     Rectangle TimerboxDraw { TimerboxX, TimerboxY, WidthOfTimerbox, HeightOfTimerbox };
+    Vector2 origin = Vector2{WidthOfTimerbox, HeightOfTimerbox};
     DrawTexturePro(
         assets.Timerbox,
         TimerboxSrc,
         TimerboxDraw,
-        { WidthOfTimerbox, HeightOfTimerbox },
+        origin,
         0,
         WHITE
     );
     int played = TheSongTime.GetSongTime();
     int length = TheSongTime.GetSongLength();
     float Width = Remap(played, 0, length, 0, WidthOfTimerbox);
+    
+    float scissorX = TimerboxX - WidthOfTimerbox;
+    float scissorY = TimerboxY - HeightOfTimerbox;
+    
     BeginScissorMode(
-        TimerboxX - WidthOfTimerbox,
-        TimerboxY - HeightOfTimerbox,
+        scissorX,
+        scissorY,
         Width + 1,
         HeightOfTimerbox + 1
     );
@@ -358,7 +426,7 @@ void GameplayMenu::DrawTimerbox(Units &u, Assets &assets, float scoreY) {
         assets.TimerboxOutline,
         TimerboxSrc,
         TimerboxDraw,
-        { WidthOfTimerbox, HeightOfTimerbox },
+        origin,
         0,
         WHITE
     );
@@ -370,10 +438,13 @@ void GameplayMenu::DrawTimerbox(Units &u, Assets &assets, float scoreY) {
     const char *textTime = TextFormat(
         "%i:%02i / %i:%02i", playedMinutes, playedSeconds, songMinutes, songSeconds
     );
+    
+    Vector2 textPos = { TimerboxX - (WidthOfTimerbox / 2), scoreY - u.hinpct(SmallHeader) };
+    
     GameMenu::mhDrawText(
         assets.rubik,
         textTime,
-        { u.RightSide - (WidthOfTimerbox / 2), scoreY - u.hinpct(SmallHeader) },
+        textPos,
         u.hinpct(SmallHeader * 0.66),
         WHITE,
         assets.sdfShader,
@@ -387,9 +458,11 @@ void GameplayMenu::DrawGameplayStars(
     int starsval = ThePlayerManager.BandStats->Stars();
     float starPercent = (float)ThePlayerManager.BandStats->Score
         / (float)ThePlayerManager.BandStats->BaseScore;
+    extern Encore::Settings TheGameSettings;
     for (int i = 0; i < 5; i++) {
         bool firstStar = (i == 0);
-        float starX = scorePos - u.hinpct(0.26) + (i * u.hinpct(0.0525));
+        float starX;
+        starX = scorePos - u.hinpct(0.26) + (i * u.hinpct(0.0525));
         float starWH = u.hinpct(0.05);
         Rectangle emptyStarWH = {
             0, 0, (float)assets.emptyStar.width, (float)assets.emptyStar.height
@@ -423,8 +496,11 @@ void GameplayMenu::DrawGameplayStars(
         float yMaskPos = Remap(
             starPercent, BAND_STAR_THRESHOLD[4], BAND_STAR_THRESHOLD[5], 0, u.hinpct(0.05)
         );
+        float scissorX = scorePos - (starWH * 6);
+        float scissorWidth = starWH * 6;
+        
         BeginScissorMode(
-            scorePos - (starWH * 6), (starY + starWH) - yMaskPos, scorePos, yMaskPos
+            scissorX, (starY + starWH) - yMaskPos, scissorWidth, yMaskPos
         );
         for (int i = 0; i < 5; i++) {
             float starX = scorePos - u.hinpct(0.26) + (i * u.hinpct(0.0525));
@@ -579,9 +655,38 @@ void GameplayMenu::Draw() {
         );
     }
 
-    float scorePos = u.RightSide - u.hinpct(0.01f);
-    float scoreY = u.hpct(0.15f);
+    extern Encore::Settings TheGameSettings;
+    
+    float hudOffsetX = 0.0f;
+    float hudOffsetY = 0.0f;
+    
+    switch (TheGameSettings.HUDPosition) {
+        case 0:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 1:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = 0.0f;
+            break;
+        case 2:
+            hudOffsetX = 0.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        case 3:
+            hudOffsetX = -(GetScreenWidth() - u.hinpct(0.28f) - u.hinpct(0.02f)) + 250.0f;
+            hudOffsetY = GetScreenHeight() - u.hpct(0.30f);
+            break;
+        default:
+            hudOffsetX = 0.0f;
+            hudOffsetY = 0.0f;
+            break;
+    }
+    
+    float scorePos = u.RightSide - u.hinpct(0.01f) + hudOffsetX;
+    float scoreY = u.hpct(0.15f) + hudOffsetY;
     float starY = scoreY + u.hinpct(0.065f);
+    
     DrawGameplayStars(u, assets, scorePos, starY);
     DrawTimerbox(u, assets, scoreY);
     DrawScorebox(u, assets, scoreY);
@@ -921,7 +1026,8 @@ void GameplayMenu::Draw() {
         TheMenuManager.SwitchScreen(RESULTS);
     }
 
-    if (ThePlayerManager.PlayersActive) {
+    extern Encore::Settings TheGameSettings;
+    if (ThePlayerManager.PlayersActive && !TheGameSettings.HideHitWindow) {
         DrawRectangle(
             u.wpct(0.5f) - (u.winpct(0.12f) / 2),
             u.hpct(0.02f) - u.winpct(0.01f),
@@ -986,7 +1092,11 @@ void GameplayMenu::Load() {
     TheSongList.curSong->LoadAlbumArt();
     std::filesystem::path videoPath = TheSongList.curSong->songInfoPath.parent_path() / "video.mp4";
     if (TheGameRenderer.backgroundVideo.Load(videoPath)) {
-        TheGameRenderer.backgroundVideo.Play();
+        if (TheSongList.curSong->videoStartTime > 0) {
+            TheGameRenderer.backgroundVideo.PlayWithDelay(TheSongList.curSong->videoStartTime);
+        } else {
+            TheGameRenderer.backgroundVideo.Play();
+        }
     }
     if (ThePlayerManager.PlayersActive > 1) {
         ThePlayerManager.BandStats->Multiplayer = true;

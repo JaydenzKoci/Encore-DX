@@ -10,14 +10,10 @@ VideoBackgroundManager& VideoBackgroundManager::getInstance() {
 }
 
 bool VideoBackgroundManager::LoadVideoBackground(const std::filesystem::path& songVideoPath) {
-    // Unload any existing video
     Unload();
-    
-    // Use the song-specific video if it exists
     if (std::filesystem::exists(songVideoPath)) {
         TraceLog(LOG_INFO, "Using song-specific video: %s", songVideoPath.string().c_str());
-        
-        // Create and load video
+
         currentVideo = std::make_unique<VideoStream>();
         if (currentVideo->Load(songVideoPath)) {
             TraceLog(LOG_INFO, "Video background loaded successfully");
@@ -41,7 +37,6 @@ void VideoBackgroundManager::Update() {
 
 void VideoBackgroundManager::Draw() {
     if (currentVideo && currentVideo->IsLoaded()) {
-        // Draw video with slight transparency so gameplay elements are visible
         currentVideo->Draw(0, 0, Color{255, 255, 255, 180});
     }
 }
