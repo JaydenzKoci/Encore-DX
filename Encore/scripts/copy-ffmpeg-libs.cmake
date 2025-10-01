@@ -34,8 +34,11 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     foreach(LIB_FILE ${ALL_SO_FILES})
         get_filename_component(LIB_NAME ${LIB_FILE} NAME)
         
+        # Skip swresample files entirely
+        if(LIB_NAME MATCHES "libswresample")
+            message(STATUS "  Skipping: ${LIB_NAME} (swresample excluded)")
         # Copy major version files (ends with .so.X where X is a single number)
-        if(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$")
+        elseif(LIB_NAME MATCHES "^lib.*\\.so\\.[0-9]+$")
             message(STATUS "  Copying major version: ${LIB_NAME}")
             configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
             
@@ -45,8 +48,8 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
             else()
                 message(STATUS "    ✗ Failed to copy ${LIB_NAME}")
             endif()
-        # Also copy base .so files (symlinks) from source
-        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE})
+        # Also copy base .so files (symlinks) from source, but not swresample
+        elseif(LIB_NAME MATCHES "^lib.*\\.so$" AND IS_SYMLINK ${LIB_FILE} AND NOT LIB_NAME MATCHES "libswresample")
             message(STATUS "  Copying base symlink: ${LIB_NAME}")
             configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
             
@@ -115,60 +118,18 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    # Verify specific files exist
+    # Verify critical files exist
     message(STATUS "Verifying critical files:")
-    set(CRITICAL_FILES "libavutil.so.60" "libswresample.so.6")
+    set(CRITICAL_FILES "libavutil.so.60" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9")
     foreach(CRITICAL_FILE ${CRITICAL_FILES})
         if(EXISTS "${TARGET_DIR}/${CRITICAL_FILE}")
             message(STATUS "  ✓ ${CRITICAL_FILE} exists")
-            # Check file permissions
-            execute_process(
-                COMMAND ls -la ${TARGET_DIR}/${CRITICAL_FILE}
-                OUTPUT_VARIABLE LS_OUTPUT
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            message(STATUS "    Permissions: ${LS_OUTPUT}")
         else()
             message(STATUS "  ✗ ${CRITICAL_FILE} missing!")
         endif()
     endforeach()
     
-    # Check dependencies of libswresample specifically
-    find_program(LDD_PROGRAM ldd)
-    if(LDD_PROGRAM AND EXISTS "${TARGET_DIR}/libswresample.so.6")
-        message(STATUS "Checking dependencies of libswresample.so.6:")
-        execute_process(
-            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libswresample.so.6
-            OUTPUT_VARIABLE LDD_OUTPUT
-            ERROR_VARIABLE LDD_ERROR
-            RESULT_VARIABLE LDD_RESULT
-        )
-        if(LDD_RESULT EQUAL 0)
-            message(STATUS "Dependencies:")
-            string(REPLACE "\n" "\n  " LDD_FORMATTED "  ${LDD_OUTPUT}")
-            message(STATUS "${LDD_FORMATTED}")
-        else()
-            message(STATUS "ldd failed: ${LDD_ERROR}")
-        endif()
-        
-        # Test if we can load libavutil directly
-        message(STATUS "Testing direct access to libavutil.so.60:")
-        execute_process(
-            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libavutil.so.60
-            OUTPUT_VARIABLE LDD_AVUTIL_OUTPUT
-            ERROR_VARIABLE LDD_AVUTIL_ERROR
-            RESULT_VARIABLE LDD_AVUTIL_RESULT
-        )
-        if(LDD_AVUTIL_RESULT EQUAL 0)
-            message(STATUS "libavutil.so.60 dependencies:")
-            string(REPLACE "\n" "\n  " LDD_AVUTIL_FORMATTED "  ${LDD_AVUTIL_OUTPUT}")
-            message(STATUS "${LDD_AVUTIL_FORMATTED}")
-        else()
-            message(STATUS "ldd on libavutil.so.60 failed: ${LDD_AVUTIL_ERROR}")
-        endif()
-    else()
-        message(STATUS "ldd not found or libswresample.so.6 missing, cannot check dependencies")
-    endif()
+
     
     # Fix RPATH and dependencies on all copied libraries
     find_program(PATCHELF_PROGRAM patchelf)
@@ -198,18 +159,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
                     message(STATUS "    Warning: Failed to set RPATH")
                 endif()
                 
-                # Special handling for libswresample.so.6 - check its dependencies
-                if(LIB_NAME STREQUAL "libswresample.so.6")
-                    message(STATUS "    Special handling for libswresample.so.6")
-                    
-                    # Check current dependencies
-                    execute_process(
-                        COMMAND ${PATCHELF_PROGRAM} --print-needed ${LIB_FILE}
-                        OUTPUT_VARIABLE NEEDED_LIBS
-                        OUTPUT_STRIP_TRAILING_WHITESPACE
-                    )
-                    message(STATUS "    Current dependencies: ${NEEDED_LIBS}")
-                endif()
+
             endif()
         endforeach()
     elseif(CHRPATH_PROGRAM)
@@ -293,12 +243,12 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    # Final test - try to run ldd on libswresample.so.6 one more time
+    # Final test - check that core libraries are properly linked
     find_program(LDD_PROGRAM ldd)
-    if(LDD_PROGRAM AND EXISTS "${TARGET_DIR}/libswresample.so.6")
-        message(STATUS "Final dependency check for libswresample.so.6:")
+    if(LDD_PROGRAM AND EXISTS "${TARGET_DIR}/libavcodec.so.62")
+        message(STATUS "Final dependency check for libavcodec.so.62:")
         execute_process(
-            COMMAND env LD_LIBRARY_PATH=${TARGET_DIR} ${LDD_PROGRAM} ${TARGET_DIR}/libswresample.so.6
+            COMMAND env LD_LIBRARY_PATH=${TARGET_DIR} ${LDD_PROGRAM} ${TARGET_DIR}/libavcodec.so.62
             OUTPUT_VARIABLE FINAL_LDD_OUTPUT
             ERROR_VARIABLE FINAL_LDD_ERROR
             RESULT_VARIABLE FINAL_LDD_RESULT
@@ -308,7 +258,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
             string(REPLACE "\n" "\n  " FINAL_LDD_FORMATTED "  ${FINAL_LDD_OUTPUT}")
             message(STATUS "${FINAL_LDD_FORMATTED}")
         else()
-            message(STATUS "ldd still failed: ${FINAL_LDD_ERROR}")
+            message(STATUS "ldd failed: ${FINAL_LDD_ERROR}")
         endif()
     endif()
     
