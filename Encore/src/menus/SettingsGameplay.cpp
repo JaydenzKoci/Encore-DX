@@ -79,6 +79,11 @@ void SettingsGameplay::Draw() {
         {
             "Scan Songs",
             "TBD"
+        },
+        // custom video background
+        {
+            "Custom Video Background",
+            "Set a custom video file to use as the background during gameplay. Leave empty to use default backgrounds."
         }
     };
 
@@ -222,6 +227,58 @@ void SettingsGameplay::Draw() {
         }
     }
 
+    settingOffset++;
+    float videoBackgroundTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle videoBackgroundBoxRect = {boxLeft - borderWidth, videoBackgroundTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, videoBackgroundTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, videoBackgroundTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 videoBackgroundTextSize = MeasureTextEx(assets.rubikBold, "Custom Video Background", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Custom Video Background", {boxLeft + u.winpct(0.01f), videoBackgroundTop + (EntryHeight - videoBackgroundTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    
+    float inputWidth = OptionWidth * 0.6f;
+    float buttonWidth = OptionWidth * 0.15f;
+    float inputLeft = OptionLeft + OptionWidth - inputWidth - buttonWidth - u.winpct(0.01f);
+    float buttonLeft = OptionLeft + OptionWidth - buttonWidth - u.winpct(0.005f);
+    
+    Rectangle inputRect = {inputLeft, videoBackgroundTop + u.hinpct(0.005f), inputWidth, EntryHeight - u.hinpct(0.01f)};
+    Rectangle browseButtonRect = {buttonLeft, videoBackgroundTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
+    Rectangle clearButtonRect = {buttonLeft - buttonWidth - u.winpct(0.005f), videoBackgroundTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
+    
+    if (CheckCollisionPointRec(mousePos, videoBackgroundBoxRect)) {
+        selectedIndex = 2;
+        isHovering = true;
+        DrawRectangleLinesEx(videoBackgroundBoxRect, highlightBorderWidth, glowColor);
+    }
+    
+    // Initialize buffer if needed
+    if (strlen(videoPathBuffer) == 0 && !TheGameSettings.CustomVideoBackgroundPath.empty()) {
+        strncpy(videoPathBuffer, TheGameSettings.CustomVideoBackgroundPath.c_str(), sizeof(videoPathBuffer) - 1);
+        videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
+    }
+    
+    // Text input for video path
+    if (GuiTextBox(inputRect, videoPathBuffer, sizeof(videoPathBuffer), editingVideoPath)) {
+        editingVideoPath = !editingVideoPath;
+        if (!editingVideoPath) {
+            TheGameSettings.CustomVideoBackgroundPath = std::string(videoPathBuffer);
+            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+        }
+    }
+    
+    // Browse button
+    if (GuiButton(browseButtonRect, "Browse")) {
+        // For now, show a simple message. In a full implementation, you'd open a file dialog
+        TraceLog(LOG_INFO, "Browse button clicked. Please enter the full path to your video file in the text box.");
+        editingVideoPath = true;
+    }
+    
+    // Clear button
+    if (GuiButton(clearButtonRect, "Clear")) {
+        memset(videoPathBuffer, 0, sizeof(videoPathBuffer));
+        TheGameSettings.CustomVideoBackgroundPath = "";
+        TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+    }
+
     if (!isHovering) {
         selectedIndex = 0;
     }
@@ -230,6 +287,25 @@ void SettingsGameplay::Draw() {
 #include <raylib.h>
 
 void SettingsGameplay::KeyboardInputCallback(int key, int scancode, int action, int mods) {
+    if (editingVideoPath) {
+        if (key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
+            editingVideoPath = false;
+            TheGameSettings.CustomVideoBackgroundPath = std::string(videoPathBuffer);
+            SettingsOld& settingsMain = SettingsOld::getInstance();
+            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+        } else if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+            editingVideoPath = false;
+            // Restore original value
+            if (!TheGameSettings.CustomVideoBackgroundPath.empty()) {
+                strncpy(videoPathBuffer, TheGameSettings.CustomVideoBackgroundPath.c_str(), sizeof(videoPathBuffer) - 1);
+                videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
+            } else {
+                memset(videoPathBuffer, 0, sizeof(videoPathBuffer));
+            }
+        }
+        return;
+    }
+    
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         Save();
         TheMenuManager.SwitchScreen(SETTINGS);
