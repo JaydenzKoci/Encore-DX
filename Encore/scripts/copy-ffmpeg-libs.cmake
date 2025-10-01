@@ -268,21 +268,16 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         if(EXISTS ${EXECUTABLE_PATH})
             message(STATUS "Patching executable to use local FFmpeg library versions...")
             
-            # Map of old version -> new version replacements
-            set(VERSION_REPLACEMENTS
-                "libavutil.so.60;libavutil.so.58"
-                "libavcodec.so.62;libavcodec.so.60"
-                "libavformat.so.62;libavformat.so.60"
-                "libswscale.so.9;libswscale.so.7"
-                "libavfilter.so.11;libavfilter.so.9"
-                "libavdevice.so.62;libavdevice.so.60"
-            )
+            # Use separate lists for version replacements
+            set(OLD_VERSIONS "libavutil.so.60" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
+            set(NEW_VERSIONS "libavutil.so.58" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9" "libavdevice.so.60")
             
-            foreach(REPLACEMENT ${VERSION_REPLACEMENTS})
-                string(REPLACE ";" "|" REPLACEMENT_PIPE ${REPLACEMENT})
-                string(REPLACE "|" ";" REPLACEMENT_LIST ${REPLACEMENT_PIPE})
-                list(GET REPLACEMENT_LIST 0 OLD_VERSION)
-                list(GET REPLACEMENT_LIST 1 NEW_VERSION)
+            list(LENGTH OLD_VERSIONS NUM_REPLACEMENTS)
+            math(EXPR LAST_INDEX "${NUM_REPLACEMENTS} - 1")
+            
+            foreach(INDEX RANGE ${LAST_INDEX})
+                list(GET OLD_VERSIONS ${INDEX} OLD_VERSION)
+                list(GET NEW_VERSIONS ${INDEX} NEW_VERSION)
                 
                 message(STATUS "  Replacing ${OLD_VERSION} with ${NEW_VERSION}")
                 execute_process(
