@@ -114,17 +114,14 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    # Verify critical library types exist (any version)
-    message(STATUS "Verifying critical library types exist:")
-    set(CRITICAL_LIB_TYPES "libavutil" "libswresample" "libavcodec" "libavformat" "libswscale")
-    foreach(LIB_TYPE ${CRITICAL_LIB_TYPES})
-        file(GLOB LIB_FILES "${TARGET_DIR}/${LIB_TYPE}.so*")
-        if(LIB_FILES)
-            list(GET LIB_FILES 0 FIRST_FILE)
-            get_filename_component(FILENAME ${FIRST_FILE} NAME)
-            message(STATUS "  ✓ ${LIB_TYPE} found: ${FILENAME}")
+    # Verify critical files exist (specific versions from local lib)
+    message(STATUS "Verifying critical files:")
+    set(CRITICAL_FILES "libavutil.so.58" "libswresample.so.4" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9")
+    foreach(CRITICAL_FILE ${CRITICAL_FILES})
+        if(EXISTS "${TARGET_DIR}/${CRITICAL_FILE}")
+            message(STATUS "  ✓ ${CRITICAL_FILE} exists")
         else()
-            message(STATUS "  ✗ ${LIB_TYPE} missing!")
+            message(STATUS "  ✗ ${CRITICAL_FILE} missing!")
         endif()
     endforeach()
     
@@ -208,9 +205,9 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     message(STATUS "Creating comprehensive symlinks for dependency resolution...")
     
     # Create additional symlinks that might be needed (excluding swresample)
-    # Define as pairs: symlink_name -> target_name
+    # Define as pairs: symlink_name -> target_name (using local lib versions)
     set(SYMLINK_NAMES "libavutil.so" "libswresample.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libavfilter.so" "libavdevice.so")
-    set(TARGET_NAMES "libavutil.so.60" "libswresample.so.4" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
+    set(TARGET_NAMES "libavutil.so.58" "libswresample.so.4" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9" "libavdevice.so.60")
     
     list(LENGTH SYMLINK_NAMES NUM_MAPPINGS)
     math(EXPR LAST_INDEX "${NUM_MAPPINGS} - 1")
@@ -263,6 +260,50 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     endif()
     
 
+    
+    # Fix the main executable to use local library versions
+    find_program(PATCHELF_PROGRAM patchelf)
+    if(PATCHELF_PROGRAM)
+        set(EXECUTABLE_PATH "${TARGET_DIR}/Encore")
+        if(EXISTS ${EXECUTABLE_PATH})
+            message(STATUS "Patching executable to use local FFmpeg library versions...")
+            
+            # Map of old version -> new version replacements
+            set(VERSION_REPLACEMENTS
+                "libavutil.so.60;libavutil.so.58"
+                "libavcodec.so.62;libavcodec.so.60"
+                "libavformat.so.62;libavformat.so.60"
+                "libswscale.so.9;libswscale.so.7"
+                "libavfilter.so.11;libavfilter.so.9"
+                "libavdevice.so.62;libavdevice.so.60"
+            )
+            
+            foreach(REPLACEMENT ${VERSION_REPLACEMENTS})
+                string(REPLACE ";" "|" REPLACEMENT_PIPE ${REPLACEMENT})
+                string(REPLACE "|" ";" REPLACEMENT_LIST ${REPLACEMENT_PIPE})
+                list(GET REPLACEMENT_LIST 0 OLD_VERSION)
+                list(GET REPLACEMENT_LIST 1 NEW_VERSION)
+                
+                message(STATUS "  Replacing ${OLD_VERSION} with ${NEW_VERSION}")
+                execute_process(
+                    COMMAND ${PATCHELF_PROGRAM} --replace-needed ${OLD_VERSION} ${NEW_VERSION} ${EXECUTABLE_PATH}
+                    RESULT_VARIABLE REPLACE_RESULT
+                    OUTPUT_QUIET
+                    ERROR_QUIET
+                )
+                
+                if(REPLACE_RESULT EQUAL 0)
+                    message(STATUS "    ✓ Successfully replaced ${OLD_VERSION}")
+                else()
+                    message(STATUS "    ✗ Failed to replace ${OLD_VERSION}")
+                endif()
+            endforeach()
+        else()
+            message(STATUS "Executable not found at ${EXECUTABLE_PATH}")
+        endif()
+    else()
+        message(STATUS "patchelf not found - cannot patch executable dependencies")
+    endif()
     
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
 else()
