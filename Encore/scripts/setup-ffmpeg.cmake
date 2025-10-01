@@ -130,11 +130,11 @@ function(find_ffmpeg_libraries)
             PATHS ${FFMPEG_LIB_DIR}
             PATH_SUFFIXES lib
         )
-        find_library(SWRESAMPLE_LIB 
-            NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
-            PATHS ${FFMPEG_LIB_DIR}
-            PATH_SUFFIXES lib
-        )
+        # find_library(SWRESAMPLE_LIB 
+        #     NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
+        #     PATHS ${FFMPEG_LIB_DIR}
+        #     PATH_SUFFIXES lib
+        # )
         find_library(AVFILTER_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR}
@@ -171,11 +171,11 @@ function(find_ffmpeg_libraries)
             PATHS ${FFMPEG_LIB_DIR} 
             NO_DEFAULT_PATH
         )
-        find_library(SWRESAMPLE_LIB 
-            NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
-            PATHS ${FFMPEG_LIB_DIR} 
-            NO_DEFAULT_PATH
-        )
+        # find_library(SWRESAMPLE_LIB 
+        #     NAMES ${FFMPEG_LIB_PREFIX}swresample${FFMPEG_LIB_SUFFIX}
+        #     PATHS ${FFMPEG_LIB_DIR} 
+        #     NO_DEFAULT_PATH
+        # )
         find_library(AVFILTER_LIB 
             NAMES ${FFMPEG_LIB_PREFIX}avfilter${FFMPEG_LIB_SUFFIX}
             PATHS ${FFMPEG_LIB_DIR} 
@@ -275,9 +275,9 @@ function(find_ffmpeg_libraries)
     if(POSTPROC_LIB)
         list(APPEND FFMPEG_LIBRARIES_LIST ${POSTPROC_LIB})
     endif()
-    if(SWRESAMPLE_LIB)
-        list(APPEND FFMPEG_LIBRARIES_LIST ${SWRESAMPLE_LIB})
-    endif()
+    # if(SWRESAMPLE_LIB)
+    #     list(APPEND FFMPEG_LIBRARIES_LIST ${SWRESAMPLE_LIB})
+    # endif()
     list(APPEND FFMPEG_LIBRARIES_LIST ${SWSCALE_LIB})
     list(APPEND FFMPEG_LIBRARIES_LIST ${AVUTIL_LIB})
 
@@ -288,9 +288,9 @@ function(find_ffmpeg_libraries)
     message(STATUS "  AVCODEC: ${AVCODEC_LIB}")
     message(STATUS "  AVUTIL: ${AVUTIL_LIB}")
     message(STATUS "  SWSCALE: ${SWSCALE_LIB}")
-    if(SWRESAMPLE_LIB)
-        message(STATUS "  SWRESAMPLE: ${SWRESAMPLE_LIB}")
-    endif()
+    # if(SWRESAMPLE_LIB)
+    #     message(STATUS "  SWRESAMPLE: ${SWRESAMPLE_LIB}")
+    # endif()
     if(AVFILTER_LIB)
         message(STATUS "  AVFILTER: ${AVFILTER_LIB}")
     endif()

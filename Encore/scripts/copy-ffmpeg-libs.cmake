@@ -64,7 +64,6 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     # Create base symlinks for major version libraries
     # This ensures libname.so -> libname.so.X for proper dynamic linking
     set(FFMPEG_LIBS_TO_LINK
-        "swresample"
         "avcodec"
         "avformat"
         "avutil"
@@ -258,10 +257,9 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     # Create comprehensive symlinks to handle all possible dependency naming
     message(STATUS "Creating comprehensive symlinks for dependency resolution...")
     
-    # Create additional symlinks that might be needed
+    # Create additional symlinks that might be needed (excluding swresample)
     set(SYMLINK_MAPPINGS
         "libavutil.so;libavutil.so.60"
-        "libswresample.so;libswresample.so.6"
         "libavcodec.so;libavcodec.so.62"
         "libavformat.so;libavformat.so.62"
         "libswscale.so;libswscale.so.9"
