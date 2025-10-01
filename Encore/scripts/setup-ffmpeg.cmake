@@ -385,7 +385,7 @@ function(setup_all_post_build TARGET_NAME TARGET_DIR)
             
             # Copy FFmpeg .so files using file(GLOB) in a custom script
             COMMAND ${CMAKE_COMMAND} -E echo "Copying FFmpeg .so files..."
-            COMMAND ${CMAKE_COMMAND} -E env FFMPEG_LIB_DIR=${FFMPEG_LIB_DIR} TARGET_DIR=${TARGET_DIR} ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy-ffmpeg-libs.cmake
+            COMMAND ${CMAKE_COMMAND} -E env FFMPEG_LIB_DIR=${FFMPEG_LIB_DIR} TARGET_DIR=${TARGET_DIR} SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/copy-ffmpeg-libs.cmake
             
             COMMENT "Copying Linux dependencies to output directory"
         )
