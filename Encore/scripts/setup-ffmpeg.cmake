@@ -33,20 +33,13 @@ function(setup_ffmpeg)
         set(USE_DOWNLOAD FALSE)
         set(BUILD_FROM_SOURCE TRUE)
     elseif(UNIX)
-        # Linux: Download from BtbN
-        set(FFMPEG_BASE_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest")
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-linux64-gpl-shared")
-            set(PLATFORM_NAME "Linux x64")
-        else()
-            set(FFMPEG_PACKAGE "ffmpeg-master-latest-linux32-gpl-shared")
-            set(PLATFORM_NAME "Linux x86")
-        endif()
-        set(ARCHIVE_EXT "tar.xz")
+        # Linux: Use local FFmpeg libraries instead of downloading
+        set(PLATFORM_NAME "Linux x64")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".so")
         set(SHARED_SUFFIX ".so")
-        set(USE_DOWNLOAD TRUE)
+        set(USE_DOWNLOAD FALSE)
+        set(USE_LOCAL TRUE)
     endif()
     
     message(STATUS "Setting up FFmpeg for ${PLATFORM_NAME}")
@@ -85,8 +78,23 @@ function(setup_ffmpeg)
         set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_PREFIX}/include" PARENT_SCOPE)
         set(FFMPEG_LIB_DIR "${FFMPEG_INSTALL_PREFIX}/lib" PARENT_SCOPE)
         set(FFMPEG_BIN_DIR "${FFMPEG_INSTALL_PREFIX}/bin" PARENT_SCOPE)
-    else()
+    elseif(USE_LOCAL)
         # Use local FFmpeg from lib folder
+        set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/ffmpeg/linux")
+        
+        # Check if local FFmpeg exists
+        if(NOT EXISTS "${FFMPEG_LOCAL_DIR}")
+            message(FATAL_ERROR "FFmpeg not found at ${FFMPEG_LOCAL_DIR}. Please ensure FFmpeg is installed in the lib folder with the expected structure.")
+        endif()
+        
+        message(STATUS "Using local FFmpeg from: ${FFMPEG_LOCAL_DIR}")
+        
+        # Set the output variables to point to local FFmpeg
+        set(FFMPEG_INCLUDE_DIR "${FFMPEG_LOCAL_DIR}/include" PARENT_SCOPE)
+        set(FFMPEG_LIB_DIR "${FFMPEG_LOCAL_DIR}/lib" PARENT_SCOPE)
+        set(FFMPEG_BIN_DIR "${FFMPEG_LOCAL_DIR}/bin" PARENT_SCOPE)
+    else()
+        # Use local FFmpeg from lib folder (fallback)
         set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/${FFMPEG_FOLDER}")
         
         # Check if local FFmpeg exists

@@ -261,44 +261,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
     
 
     
-    # Fix the main executable to use local library versions
-    find_program(PATCHELF_PROGRAM patchelf)
-    if(PATCHELF_PROGRAM)
-        set(EXECUTABLE_PATH "${TARGET_DIR}/Encore")
-        if(EXISTS ${EXECUTABLE_PATH})
-            message(STATUS "Patching executable to use local FFmpeg library versions...")
-            
-            # Use separate lists for version replacements
-            set(OLD_VERSIONS "libavutil.so.60" "libavcodec.so.62" "libavformat.so.62" "libswscale.so.9" "libavfilter.so.11" "libavdevice.so.62")
-            set(NEW_VERSIONS "libavutil.so.58" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9" "libavdevice.so.60")
-            
-            list(LENGTH OLD_VERSIONS NUM_REPLACEMENTS)
-            math(EXPR LAST_INDEX "${NUM_REPLACEMENTS} - 1")
-            
-            foreach(INDEX RANGE ${LAST_INDEX})
-                list(GET OLD_VERSIONS ${INDEX} OLD_VERSION)
-                list(GET NEW_VERSIONS ${INDEX} NEW_VERSION)
-                
-                message(STATUS "  Replacing ${OLD_VERSION} with ${NEW_VERSION}")
-                execute_process(
-                    COMMAND ${PATCHELF_PROGRAM} --replace-needed ${OLD_VERSION} ${NEW_VERSION} ${EXECUTABLE_PATH}
-                    RESULT_VARIABLE REPLACE_RESULT
-                    OUTPUT_QUIET
-                    ERROR_QUIET
-                )
-                
-                if(REPLACE_RESULT EQUAL 0)
-                    message(STATUS "    ✓ Successfully replaced ${OLD_VERSION}")
-                else()
-                    message(STATUS "    ✗ Failed to replace ${OLD_VERSION}")
-                endif()
-            endforeach()
-        else()
-            message(STATUS "Executable not found at ${EXECUTABLE_PATH}")
-        endif()
-    else()
-        message(STATUS "patchelf not found - cannot patch executable dependencies")
-    endif()
+
     
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
 else()
