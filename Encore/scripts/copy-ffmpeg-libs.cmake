@@ -108,6 +108,64 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
+    # Check dependencies of libswresample specifically
+    find_program(LDD_PROGRAM ldd)
+    if(LDD_PROGRAM)
+        message(STATUS "Checking dependencies of libswresample.so.6:")
+        execute_process(
+            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libswresample.so.6
+            OUTPUT_VARIABLE LDD_OUTPUT
+            ERROR_VARIABLE LDD_ERROR
+            RESULT_VARIABLE LDD_RESULT
+        )
+        if(LDD_RESULT EQUAL 0)
+            message(STATUS "Dependencies:")
+            string(REPLACE "\n" "\n  " LDD_FORMATTED "  ${LDD_OUTPUT}")
+            message(STATUS "${LDD_FORMATTED}")
+        else()
+            message(STATUS "ldd failed: ${LDD_ERROR}")
+        endif()
+        
+        # Also check libavcodec for comparison
+        message(STATUS "Checking dependencies of libavcodec.so.62 for comparison:")
+        execute_process(
+            COMMAND ${LDD_PROGRAM} ${TARGET_DIR}/libavcodec.so.62
+            OUTPUT_VARIABLE LDD_OUTPUT2
+            ERROR_VARIABLE LDD_ERROR2
+            RESULT_VARIABLE LDD_RESULT2
+        )
+        if(LDD_RESULT2 EQUAL 0)
+            message(STATUS "Dependencies:")
+            string(REPLACE "\n" "\n  " LDD_FORMATTED2 "  ${LDD_OUTPUT2}")
+            message(STATUS "${LDD_FORMATTED2}")
+        endif()
+    else()
+        message(STATUS "ldd not found, cannot check dependencies")
+    endif()
+    
+    # Fix RPATH on all copied libraries to ensure they can find each other
+    find_program(PATCHELF_PROGRAM patchelf)
+    if(PATCHELF_PROGRAM)
+        message(STATUS "Fixing RPATH on copied libraries...")
+        file(GLOB COPIED_LIBS "${TARGET_DIR}/lib*.so.[0-9]*")
+        foreach(LIB_FILE ${COPIED_LIBS})
+            get_filename_component(LIB_NAME ${LIB_FILE} NAME)
+            message(STATUS "  Setting RPATH on ${LIB_NAME}")
+            execute_process(
+                COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN' ${LIB_FILE}
+                RESULT_VARIABLE PATCHELF_RESULT
+                OUTPUT_QUIET
+                ERROR_QUIET
+            )
+            if(NOT PATCHELF_RESULT EQUAL 0)
+                message(STATUS "    Warning: Failed to set RPATH on ${LIB_NAME}")
+            endif()
+        endforeach()
+    else()
+        message(STATUS "patchelf not found, cannot fix library RPATH")
+        message(STATUS "Consider installing patchelf for better library compatibility")
+    endif()
+    
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
 else()
     message(STATUS "FFMPEG_LIB_DIR or TARGET_DIR not set")
