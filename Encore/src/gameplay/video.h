@@ -212,16 +212,6 @@ public:
         }
     }
     bool IsLoaded() const { return isLoaded; }
-    
-    // Static method to get the video path to use (custom or default)
-    static std::filesystem::path GetVideoPath(const std::filesystem::path& defaultPath) {
-        extern Encore::Settings TheGameSettings;
-        if (!TheGameSettings.CustomVideoBackgroundPath.empty() && 
-            std::filesystem::exists(TheGameSettings.CustomVideoBackgroundPath)) {
-            return TheGameSettings.CustomVideoBackgroundPath;
-        }
-        return defaultPath;
-    }
 
 private:
     void DecodeLoop() {

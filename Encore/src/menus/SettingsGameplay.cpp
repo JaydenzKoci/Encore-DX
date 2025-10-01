@@ -1,7 +1,3 @@
-//
-// Created by Jaydenz on 04/29/2025.
-//
-
 #include "SettingsGameplay.h"
 
 #include "MenuManager.h"
@@ -14,7 +10,8 @@
 #include "gameplay/enctime.h"
 #include "OvershellMenu.h"
 #include "util/settings-text.h"
-#include "util/file_dialog.h"
+#include "gameplay/video.h"
+
 
 bool ShowGameplaySettings = true;
 
@@ -81,10 +78,9 @@ void SettingsGameplay::Draw() {
             "Scan Songs",
             "TBD"
         },
-        // custom video background
         {
-            "Custom Video Background",
-            "Set a custom video file to override all song backgrounds during gameplay.\n\nSupported formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM\n\nClick 'Browse' to select a file or enter the full path manually.\n\nLeave empty to use default song backgrounds."
+            "Video Preview",
+            "Preview the background video for the currently selected song.\n\nIf the song has a video file, you can preview it here.\n\nClick 'Play' to start the preview or 'Stop' to end it."
         }
     };
 
@@ -229,63 +225,109 @@ void SettingsGameplay::Draw() {
     }
 
     settingOffset++;
-    float videoBackgroundTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
-    Rectangle videoBackgroundBoxRect = {boxLeft - borderWidth, videoBackgroundTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
-    DrawRectangle(boxLeft - borderWidth, videoBackgroundTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
-    DrawRectangle(boxLeft, videoBackgroundTop, boxWidth, EntryHeight, boxBackground);
-    Vector2 videoBackgroundTextSize = MeasureTextEx(assets.rubikBold, "Custom Video Background", EntryFontSize, 0);
-    DrawTextEx(assets.rubikBold, "Custom Video Background", {boxLeft + u.winpct(0.01f), videoBackgroundTop + (EntryHeight - videoBackgroundTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    float videoPreviewTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle videoPreviewBoxRect = {boxLeft - borderWidth, videoPreviewTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, videoPreviewTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, videoPreviewTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 videoPreviewTextSize = MeasureTextEx(assets.rubikBold, "Video Preview", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Video Preview", {boxLeft + u.winpct(0.01f), videoPreviewTop + (EntryHeight - videoPreviewTextSize.y) / 2}, EntryFontSize, 0, WHITE);
     
-    float inputWidth = OptionWidth * 0.6f;
     float buttonWidth = OptionWidth * 0.15f;
-    float inputLeft = OptionLeft + OptionWidth - inputWidth - buttonWidth - u.winpct(0.01f);
-    float buttonLeft = OptionLeft + OptionWidth - buttonWidth - u.winpct(0.005f);
+    float playButtonLeft = OptionLeft + OptionWidth - buttonWidth * 2 - u.winpct(0.01f);
+    float stopButtonLeft = OptionLeft + OptionWidth - buttonWidth - u.winpct(0.005f);
     
-    Rectangle inputRect = {inputLeft, videoBackgroundTop + u.hinpct(0.005f), inputWidth, EntryHeight - u.hinpct(0.01f)};
-    Rectangle browseButtonRect = {buttonLeft, videoBackgroundTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
-    Rectangle clearButtonRect = {buttonLeft - buttonWidth - u.winpct(0.005f), videoBackgroundTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
+    Rectangle playButtonRect = {playButtonLeft, videoPreviewTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
+    Rectangle stopButtonRect = {stopButtonLeft, videoPreviewTop + u.hinpct(0.005f), buttonWidth, EntryHeight - u.hinpct(0.01f)};
     
-    if (CheckCollisionPointRec(mousePos, videoBackgroundBoxRect)) {
+    if (CheckCollisionPointRec(mousePos, videoPreviewBoxRect)) {
         selectedIndex = 2;
         isHovering = true;
-        DrawRectangleLinesEx(videoBackgroundBoxRect, highlightBorderWidth, glowColor);
+        DrawRectangleLinesEx(videoPreviewBoxRect, highlightBorderWidth, glowColor);
     }
     
-    // Initialize buffer if needed
-    if (strlen(videoPathBuffer) == 0 && !TheGameSettings.CustomVideoBackgroundPath.empty()) {
-        strncpy(videoPathBuffer, TheGameSettings.CustomVideoBackgroundPath.c_str(), sizeof(videoPathBuffer) - 1);
-        videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
-    }
-    
-    // Text input for video path
-    if (GuiTextBox(inputRect, videoPathBuffer, sizeof(videoPathBuffer), editingVideoPath)) {
-        editingVideoPath = !editingVideoPath;
-        if (!editingVideoPath) {
-            TheGameSettings.CustomVideoBackgroundPath = std::string(videoPathBuffer);
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+    bool hasVideo = false;
+    std::filesystem::path videoPath;
+    if (TheSongList.curSong != nullptr) {
+        std::vector<std::string> videoExtensions = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm"};
+        for (const auto& ext : videoExtensions) {
+            std::filesystem::path potentialVideo = TheSongList.curSong->songDir / ("video" + ext);
+            if (std::filesystem::exists(potentialVideo)) {
+                hasVideo = true;
+                videoPath = potentialVideo;
+                break;
+            }
+            potentialVideo = TheSongList.curSong->songDir / (TheSongList.curSong->title + ext);
+            if (std::filesystem::exists(potentialVideo)) {
+                hasVideo = true;
+                videoPath = potentialVideo;
+                break;
+            }
         }
     }
     
-    // Browse button
-    if (GuiButton(browseButtonRect, "Browse")) {
-        std::string selectedFile = Encore::FileDialog::OpenVideoFile();
-        if (!selectedFile.empty() && Encore::FileDialog::IsValidVideoFile(selectedFile)) {
-            strncpy(videoPathBuffer, selectedFile.c_str(), sizeof(videoPathBuffer) - 1);
-            videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
-            TheGameSettings.CustomVideoBackgroundPath = selectedFile;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
-            TraceLog(LOG_INFO, "Selected video file: %s", selectedFile.c_str());
-        } else if (!selectedFile.empty()) {
-            TraceLog(LOG_WARNING, "Selected file is not a valid video file: %s", selectedFile.c_str());
+    static VideoStream previewVideo;
+    static bool videoLoaded = false;
+    static std::filesystem::path loadedVideoPath;
+    if (GuiButton(playButtonRect, "Play")) {
+        if (hasVideo) {
+            if (!videoLoaded || loadedVideoPath != videoPath) {
+                previewVideo.Unload();
+                if (previewVideo.Load(videoPath)) {
+                    videoLoaded = true;
+                    loadedVideoPath = videoPath;
+                    TraceLog(LOG_INFO, "Loaded video for preview: %s", videoPath.string().c_str());
+                } else {
+                    videoLoaded = false;
+                    TraceLog(LOG_ERROR, "Failed to load video: %s", videoPath.string().c_str());
+                }
+            }
+            if (videoLoaded) {
+                previewVideo.Play();
+                TraceLog(LOG_INFO, "Started video preview");
+            }
+        } else {
+            TraceLog(LOG_INFO, "No video found for current song");
         }
     }
-    
-    // Clear button
-    if (GuiButton(clearButtonRect, "Clear")) {
-        memset(videoPathBuffer, 0, sizeof(videoPathBuffer));
-        TheGameSettings.CustomVideoBackgroundPath = "";
-        TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+
+    if (GuiButton(stopButtonRect, "Stop")) {
+        if (videoLoaded) {
+            previewVideo.Stop();
+            TraceLog(LOG_INFO, "Stopped video preview");
+        }
     }
+
+    if (videoLoaded && previewVideo.IsLoaded()) {
+        previewVideo.Update();
+
+        float previewWidth = SidebarWidth * 0.8f;
+        float previewHeight = u.hinpct(0.05f);
+        float previewX = SidebarLeft + (SidebarWidth - previewWidth) / 2;
+        float previewY = currentY + u.hinpct(0.03f);
+
+        DrawRectangle(previewX, previewY, previewWidth, previewHeight, Color{50, 50, 50, 255});
+        DrawRectangleLinesEx({previewX, previewY, previewWidth, previewHeight}, 2, WHITE);
+
+        Vector2 playingSize = MeasureTextEx(assets.rubikBold, "PLAYING", u.hinpct(0.025f), 0);
+        float playingX = previewX + (previewWidth - playingSize.x) / 2;
+        float playingY = previewY + (previewHeight - playingSize.y) / 2;
+        DrawTextEx(assets.rubikBold, "PLAYING", {playingX, playingY}, u.hinpct(0.025f), 0, GREEN);
+    }
+    
+    // Show video status
+    std::string statusText;
+    if (!hasVideo) {
+        statusText = "No video found for current song";
+    } else if (!videoLoaded) {
+        statusText = "Video available: " + videoPath.filename().string();
+    } else {
+        statusText = "Playing: " + videoPath.filename().string();
+    }
+    
+    Vector2 statusSize = MeasureTextEx(assets.rubik, statusText.c_str(), u.hinpct(0.02f), 0);
+    float statusX = SidebarLeft + (SidebarWidth - statusSize.x) / 2;
+    float statusY = currentY + u.hinpct(0.01f);
+    DrawTextEx(assets.rubik, statusText.c_str(), {statusX, statusY}, u.hinpct(0.02f), 0, LIGHTGRAY);
 
     if (!isHovering) {
         selectedIndex = 0;
@@ -295,25 +337,6 @@ void SettingsGameplay::Draw() {
 #include <raylib.h>
 
 void SettingsGameplay::KeyboardInputCallback(int key, int scancode, int action, int mods) {
-    if (editingVideoPath) {
-        if (key == GLFW_KEY_ENTER && action == GLFW_PRESS) {
-            editingVideoPath = false;
-            TheGameSettings.CustomVideoBackgroundPath = std::string(videoPathBuffer);
-            SettingsOld& settingsMain = SettingsOld::getInstance();
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
-        } else if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-            editingVideoPath = false;
-            // Restore original value
-            if (!TheGameSettings.CustomVideoBackgroundPath.empty()) {
-                strncpy(videoPathBuffer, TheGameSettings.CustomVideoBackgroundPath.c_str(), sizeof(videoPathBuffer) - 1);
-                videoPathBuffer[sizeof(videoPathBuffer) - 1] = '\0';
-            } else {
-                memset(videoPathBuffer, 0, sizeof(videoPathBuffer));
-            }
-        }
-        return;
-    }
-    
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         Save();
         TheMenuManager.SwitchScreen(SETTINGS);

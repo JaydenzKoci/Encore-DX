@@ -37,7 +37,6 @@ namespace Encore {
         SETTINGS_OPTIONS
 #undef OPTION
         std::vector<std::filesystem::path> SongPaths;
-        std::string CustomVideoBackgroundPath;
         void SaveToFile(const std::string& filename) const;
         void LoadFromFile(const std::string& filename);
     };
@@ -56,8 +55,7 @@ namespace Encore {
         AudioOffset,
         DiscordRichPresence,
         SongPaths,
-        BackgroundBeatFlash,
-        CustomVideoBackgroundPath
+        BackgroundBeatFlash
     );
 
     class SettingsInit {

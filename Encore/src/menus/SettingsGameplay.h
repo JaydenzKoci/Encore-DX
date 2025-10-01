@@ -23,8 +23,6 @@ public:
 
 private:
     bool Fullscreen = false;
-    bool editingVideoPath = false;
-    char videoPathBuffer[512] = {0};
 };
 
 extern Encore::SettingsGameplay TheGameplaySettings;

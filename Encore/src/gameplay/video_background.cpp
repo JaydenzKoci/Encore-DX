@@ -13,30 +13,22 @@ bool VideoBackgroundManager::LoadVideoBackground(const std::filesystem::path& so
     // Unload any existing video
     Unload();
     
-    // Determine which video to use (custom override or song-specific)
-    std::filesystem::path videoToLoad;
-    
-    // Check if custom video background is set and exists
-    if (!TheGameSettings.CustomVideoBackgroundPath.empty() && 
-        std::filesystem::exists(TheGameSettings.CustomVideoBackgroundPath)) {
-        videoToLoad = TheGameSettings.CustomVideoBackgroundPath;
-        TraceLog(LOG_INFO, "Using custom video background: %s", videoToLoad.string().c_str());
-    } else if (std::filesystem::exists(songVideoPath)) {
-        videoToLoad = songVideoPath;
-        TraceLog(LOG_INFO, "Using song-specific video: %s", videoToLoad.string().c_str());
+    // Use the song-specific video if it exists
+    if (std::filesystem::exists(songVideoPath)) {
+        TraceLog(LOG_INFO, "Using song-specific video: %s", songVideoPath.string().c_str());
+        
+        // Create and load video
+        currentVideo = std::make_unique<VideoStream>();
+        if (currentVideo->Load(songVideoPath)) {
+            TraceLog(LOG_INFO, "Video background loaded successfully");
+            return true;
+        } else {
+            TraceLog(LOG_ERROR, "Failed to load video background: %s", songVideoPath.string().c_str());
+            currentVideo.reset();
+            return false;
+        }
     } else {
         TraceLog(LOG_INFO, "No video background available");
-        return false;
-    }
-    
-    // Create and load video
-    currentVideo = std::make_unique<VideoStream>();
-    if (currentVideo->Load(videoToLoad)) {
-        TraceLog(LOG_INFO, "Video background loaded successfully");
-        return true;
-    } else {
-        TraceLog(LOG_ERROR, "Failed to load video background: %s", videoToLoad.string().c_str());
-        currentVideo.reset();
         return false;
     }
 }
