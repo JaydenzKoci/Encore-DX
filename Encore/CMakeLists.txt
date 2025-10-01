@@ -112,6 +112,7 @@ if(UNIX AND NOT APPLE)
     find_library(BASS NAMES bass PATHS "lib/bass/linux/x86_64")
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/linux/x86_64")
     
+    # Set RPATH to look in the same directory as the executable
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
   endif()
   
@@ -207,6 +208,15 @@ if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
+
+# Set RPATH properties for Linux to ensure shared libraries are found
+if(UNIX AND NOT APPLE)
+    set_target_properties(Encore PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "$ORIGIN"
+        INSTALL_RPATH_USE_LINK_PATH FALSE
+    )
+endif()
 
 # Add post-build step to copy all assets and dependencies
 if(CMAKE_CONFIGURATION_TYPES)
