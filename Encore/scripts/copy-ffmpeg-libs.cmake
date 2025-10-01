@@ -6,31 +6,31 @@ set(FFMPEG_LIB_DIR "$ENV{FFMPEG_LIB_DIR}")
 set(TARGET_DIR "$ENV{TARGET_DIR}")
 
 if(FFMPEG_LIB_DIR AND TARGET_DIR)
-    # Define the specific FFmpeg libraries we want (base .so files and specific versioned ones)
-    set(FFMPEG_LIBS
-        "libavcodec.so"
-        "libavformat.so"
-        "libavutil.so"
-        "libswscale.so"
-        "libswresample.so"
-        "libswresample.so.6"
-        "libavfilter.so"
-        "libavdevice.so"
-    )
+    # First, let's see what's actually available in the FFmpeg lib directory
+    message(STATUS "Checking FFmpeg lib directory: ${FFMPEG_LIB_DIR}")
+    if(EXISTS ${FFMPEG_LIB_DIR})
+        file(GLOB ALL_LIB_FILES "${FFMPEG_LIB_DIR}/*")
+        message(STATUS "Available files in FFmpeg lib directory:")
+        foreach(FILE ${ALL_LIB_FILES})
+            get_filename_component(FILENAME ${FILE} NAME)
+            message(STATUS "  - ${FILENAME}")
+        endforeach()
+    else()
+        message(STATUS "FFmpeg lib directory does not exist!")
+    endif()
+    
+    # Copy all .so files (both base and versioned)
+    file(GLOB FFMPEG_SO_FILES "${FFMPEG_LIB_DIR}/*.so*")
     
     set(COPIED_COUNT 0)
-    foreach(LIB_NAME ${FFMPEG_LIBS})
-        set(LIB_PATH "${FFMPEG_LIB_DIR}/${LIB_NAME}")
-        if(EXISTS ${LIB_PATH})
-            message(STATUS "  Copying ${LIB_NAME}")
-            file(COPY ${LIB_PATH} DESTINATION ${TARGET_DIR})
-            math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
-        else()
-            message(STATUS "  Skipping ${LIB_NAME} (not found)")
-        endif()
+    foreach(LIB_FILE ${FFMPEG_SO_FILES})
+        get_filename_component(LIB_NAME ${LIB_FILE} NAME)
+        message(STATUS "  Copying ${LIB_NAME}")
+        file(COPY ${LIB_FILE} DESTINATION ${TARGET_DIR})
+        math(EXPR COPIED_COUNT "${COPIED_COUNT} + 1")
     endforeach()
     
-    message(STATUS "Copied ${COPIED_COUNT} FFmpeg .so files (base versions + libswresample.so.6)")
+    message(STATUS "Copied ${COPIED_COUNT} FFmpeg .so files (all versions)")
 else()
     message(STATUS "FFMPEG_LIB_DIR or TARGET_DIR not set")
 endif()
