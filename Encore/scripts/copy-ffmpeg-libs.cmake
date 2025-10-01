@@ -1,12 +1,9 @@
-# Helper script to copy FFmpeg .so files for Linux
-# This script is called during post-build to copy FFmpeg shared libraries
 
-# Get environment variables passed from the main build
 set(FFMPEG_LIB_DIR "$ENV{FFMPEG_LIB_DIR}")
 set(TARGET_DIR "$ENV{TARGET_DIR}")
 
 if(FFMPEG_LIB_DIR AND TARGET_DIR)
-    # First, let's see what's actually available in the FFmpeg lib directory
+
     message(STATUS "Checking FFmpeg lib directory: ${FFMPEG_LIB_DIR}")
     if(EXISTS ${FFMPEG_LIB_DIR})
         file(GLOB ALL_LIB_FILES "${FFMPEG_LIB_DIR}/*")
@@ -19,15 +16,11 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         message(STATUS "FFmpeg lib directory does not exist!")
     endif()
     
-    # Copy everything from local lib folder instead of FFmpeg download
-    # Use SOURCE_DIR environment variable passed from main CMake
+
     set(SOURCE_DIR "$ENV{SOURCE_DIR}")
     set(LOCAL_FFMPEG_LIB_DIR "${SOURCE_DIR}/lib/ffmpeg/linux/lib")
     message(STATUS "Using local FFmpeg libraries from: ${LOCAL_FFMPEG_LIB_DIR}")
-    
-    # Debug: Show paths
-    message(STATUS "SOURCE_DIR from env: ${SOURCE_DIR}")
-    message(STATUS "Looking for local libs at: ${LOCAL_FFMPEG_LIB_DIR}")
+
     
     if(EXISTS ${LOCAL_FFMPEG_LIB_DIR})
         file(GLOB LOCAL_SO_FILES "${LOCAL_FFMPEG_LIB_DIR}/*.so*")
@@ -41,7 +34,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         foreach(LIB_FILE ${LOCAL_SO_FILES})
             get_filename_component(LIB_NAME ${LIB_FILE} NAME)
             
-            # Copy all .so files from local directory
+
             if(LIB_NAME MATCHES "^lib.*\\.so.*$")
                 message(STATUS "  Copying local file: ${LIB_NAME}")
                 configure_file(${LIB_FILE} ${TARGET_DIR}/${LIB_NAME} COPYONLY)
@@ -114,7 +107,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    # Verify critical files exist (specific versions from local lib)
+
     message(STATUS "Verifying critical files:")
     set(CRITICAL_FILES "libavutil.so.58" "libswresample.so.4" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9")
     foreach(CRITICAL_FILE ${CRITICAL_FILES})
@@ -137,11 +130,11 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         foreach(LIB_FILE ${COPIED_LIBS})
             get_filename_component(LIB_NAME ${LIB_FILE} NAME)
             
-            # Skip symlinks for RPATH modification
+
             if(NOT IS_SYMLINK ${LIB_FILE})
                 message(STATUS "  Processing ${LIB_NAME}")
                 
-                # Set RPATH to look in current directory first
+
                 execute_process(
                     COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN' ${LIB_FILE}
                     RESULT_VARIABLE RPATH_RESULT
@@ -183,7 +176,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         message(STATUS "Neither patchelf nor chrpath found")
         message(STATUS "Install patchelf for better library compatibility")
         
-        # As a last resort, create an LD_LIBRARY_PATH wrapper script
+
         message(STATUS "Creating LD_LIBRARY_PATH wrapper script...")
         set(WRAPPER_SCRIPT "${TARGET_DIR}/run_encore.sh")
         file(WRITE ${WRAPPER_SCRIPT} "#!/bin/bash\n")
@@ -201,11 +194,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endif()
     
-    # Create comprehensive symlinks to handle all possible dependency naming
     message(STATUS "Creating comprehensive symlinks for dependency resolution...")
-    
-    # Create additional symlinks that might be needed (excluding swresample)
-    # Define as pairs: symlink_name -> target_name (using local lib versions)
     set(SYMLINK_NAMES "libavutil.so" "libswresample.so" "libavcodec.so" "libavformat.so" "libswscale.so" "libavfilter.so" "libavdevice.so")
     set(TARGET_NAMES "libavutil.so.58" "libswresample.so.4" "libavcodec.so.60" "libavformat.so.60" "libswscale.so.7" "libavfilter.so.9" "libavdevice.so.60")
     

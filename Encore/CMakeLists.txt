@@ -1,16 +1,9 @@
-﻿# CMakeList.txt : CMake project for Encore, include source and define
-# project specific logic here.
-#
-cmake_minimum_required(VERSION 3.11)
+﻿cmake_minimum_required(VERSION 3.11)
 project(Encore)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_OSX_ARCHITECTURES x86_64)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
-# Generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Set output directories to match expected structure
-# Use config-specific directories for multi-config generators (like Visual Studio)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/Encore/Debug)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Encore/Release)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/Encore/RelWithDebInfo)
@@ -26,29 +19,26 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/Encore/Release)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_BINARY_DIR}/Encore/RelWithDebInfo)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_BINARY_DIR}/Encore/MinSizeRel)
 
-# For single-config generators (like Make), use the build type
 if(NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
 endif()
-
-# Dependencies
 include(FetchContent)
 
 set(RAYLIB_VERSION 5.5)
-find_package(raylib ${RAYLIB_VERSION} QUIET) # QUIET or REQUIRED
-if (NOT raylib_FOUND) # If there's none, fetch and build raylib
+find_package(raylib ${RAYLIB_VERSION} QUIET)
+if (NOT raylib_FOUND)
   FetchContent_Declare(
           raylib
           DOWNLOAD_EXTRACT_TIMESTAMP OFF
           URL https://github.com/Encore-Developers/raylib-Source/archive/refs/heads/master.zip
   )
   FetchContent_GetProperties(raylib)
-  if (NOT raylib_POPULATED) # Have we downloaded raylib yet?
+  if (NOT raylib_POPULATED)
     set(FETCHCONTENT_QUIET NO)
     FetchContent_MakeAvailable(raylib)
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # don't build the supplied examples
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   endif()
 endif()
 
@@ -75,7 +65,6 @@ if(WIN32)
   FetchContent_MakeAvailable(zlib)
 endif()
 
-# FFmpeg Configuration
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/setup-ffmpeg.cmake)
 setup_ffmpeg()
 find_ffmpeg_libraries()
@@ -103,8 +92,7 @@ if(WIN32)
     find_library(BASS NAMES bass PATHS "lib/bass/windows/x64/")
     find_library(BASSOPUS NAMES bassopus PATHS "lib/bass/windows/x64/")
   endif()
-  
-  # All DLLs and FFmpeg binaries will be handled by post-build step
+
 endif()
 if(UNIX AND NOT APPLE)
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -115,8 +103,7 @@ if(UNIX AND NOT APPLE)
     # Set RPATH to look in the same directory as the executable
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath='$ORIGIN'")
   endif()
-  
-  # Copy shared libraries and FFmpeg binaries will be handled by post-build step
+
 endif()
 if(APPLE)
   find_library(DISCORD-RPC NAMES discord-rpc PATHS "lib/discord-rpc/macos")
@@ -172,7 +159,7 @@ if(APPLE)
   find_package(ZLIB REQUIRED)
   list(APPEND ENCORE_LIBRARIES ZLIB::ZLIB)
   
-  # Add macOS frameworks that FFmpeg depends on
+
   find_library(COREFOUNDATION_FRAMEWORK CoreFoundation)
   find_library(COREMEDIA_FRAMEWORK CoreMedia)
   find_library(COREVIDEO_FRAMEWORK CoreVideo)
@@ -193,7 +180,6 @@ if(APPLE)
     ${IOKIT_FRAMEWORK}
   )
   
-  # Add additional system libraries that FFmpeg might need
   list(APPEND ENCORE_LIBRARIES "-liconv" "-lbz2" "-llzma")
 endif()
 if(WIN32)
@@ -203,13 +189,11 @@ if(UNIX AND NOT APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-fatal-warnings")
 endif()
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  # Disable SAFESEH for Windows x86 builds to fix FFmpeg linking issues
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SAFESEH:NO")
 endif()
 
 target_link_libraries(Encore PRIVATE ${ENCORE_LIBRARIES})
 
-# Set RPATH properties for Linux to ensure shared libraries are found
 if(UNIX AND NOT APPLE)
     set_target_properties(Encore PROPERTIES
         BUILD_WITH_INSTALL_RPATH TRUE
@@ -217,13 +201,9 @@ if(UNIX AND NOT APPLE)
         INSTALL_RPATH_USE_LINK_PATH FALSE
     )
 endif()
-
-# Add post-build step to copy all assets and dependencies
 if(CMAKE_CONFIGURATION_TYPES)
-    # For multi-config generators, we need to use generator expressions
     setup_all_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/$<CONFIG>)
 else()
-    # For single-config generators
     setup_all_post_build(Encore ${CMAKE_BINARY_DIR}/Encore/${CMAKE_BUILD_TYPE})
 endif()
 

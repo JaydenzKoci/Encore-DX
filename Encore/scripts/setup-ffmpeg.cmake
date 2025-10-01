@@ -1,20 +1,14 @@
-# FFmpeg Setup Script for Cross-Platform Support
-# This script handles downloading and setting up FFmpeg prebuilt binaries
-# for Windows (x86/x64), Linux (x86/x64), and macOS (x64)
-
 function(setup_ffmpeg)
     set(FFMPEG_VERSION "6.0")
 
     if(WIN32)
         if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            # Windows x64: Download from BtbN
             set(FFMPEG_BASE_URL "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest")
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win64-gpl-shared")
             set(PLATFORM_NAME "Windows x64")
             set(ARCHIVE_EXT "zip")
             set(USE_DOWNLOAD TRUE)
         else()
-            # Windows x86: Download from yt-dlp (revert back to downloads)
             set(FFMPEG_BASE_URL "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest")
             set(FFMPEG_PACKAGE "ffmpeg-master-latest-win32-gpl-shared")
             set(PLATFORM_NAME "Windows x86")
@@ -25,7 +19,6 @@ function(setup_ffmpeg)
         set(LIB_SUFFIX ".lib")
         set(SHARED_SUFFIX ".dll")
     elseif(APPLE)
-        # macOS: Build FFmpeg from source with shared libraries
         set(PLATFORM_NAME "macOS")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".dylib")
@@ -33,7 +26,6 @@ function(setup_ffmpeg)
         set(USE_DOWNLOAD FALSE)
         set(BUILD_FROM_SOURCE TRUE)
     elseif(UNIX)
-        # Linux: Use local FFmpeg libraries instead of downloading
         set(PLATFORM_NAME "Linux x64")
         set(LIB_PREFIX "lib")
         set(LIB_SUFFIX ".so")
@@ -45,7 +37,6 @@ function(setup_ffmpeg)
     message(STATUS "Setting up FFmpeg for ${PLATFORM_NAME}")
 
     if(USE_DOWNLOAD)
-        # Download FFmpeg prebuilt binaries
         set(FFMPEG_URL "${FFMPEG_BASE_URL}/${FFMPEG_PACKAGE}.${ARCHIVE_EXT}")
         set(FFMPEG_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg" PARENT_SCOPE)
 
@@ -69,17 +60,15 @@ function(setup_ffmpeg)
         set(FFMPEG_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/lib" PARENT_SCOPE)
         set(FFMPEG_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg/bin" PARENT_SCOPE)
     elseif(BUILD_FROM_SOURCE)
-        # Build FFmpeg from source for macOS
         message(STATUS "Building FFmpeg from source for ${PLATFORM_NAME}")
         build_ffmpeg_macos_from_source()
         
-        # Set the output variables after building
+
         set(FFMPEG_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg")
         set(FFMPEG_INCLUDE_DIR "${FFMPEG_INSTALL_PREFIX}/include" PARENT_SCOPE)
         set(FFMPEG_LIB_DIR "${FFMPEG_INSTALL_PREFIX}/lib" PARENT_SCOPE)
         set(FFMPEG_BIN_DIR "${FFMPEG_INSTALL_PREFIX}/bin" PARENT_SCOPE)
     elseif(USE_LOCAL)
-        # Use local FFmpeg from lib folder
         set(FFMPEG_LOCAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/ffmpeg/linux")
         
         # Check if local FFmpeg exists
