@@ -199,7 +199,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
                     message(STATUS "    Warning: Failed to set RPATH")
                 endif()
                 
-                # Special handling for libswresample.so.6 - check and fix its dependencies
+                # Special handling for libswresample.so.6 - check its dependencies
                 if(LIB_NAME STREQUAL "libswresample.so.6")
                     message(STATUS "    Special handling for libswresample.so.6")
                     
@@ -210,29 +210,6 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
                         OUTPUT_STRIP_TRAILING_WHITESPACE
                     )
                     message(STATUS "    Current dependencies: ${NEEDED_LIBS}")
-                    
-                    # If it's looking for libavutil.so.60, make sure the file exists and is accessible
-                    if(NEEDED_LIBS MATCHES "libavutil\\.so\\.60")
-                        if(EXISTS "${TARGET_DIR}/libavutil.so.60")
-                            message(STATUS "    ✓ libavutil.so.60 exists in target directory")
-                            
-                            # Try to replace the dependency with a relative path
-                            execute_process(
-                                COMMAND ${PATCHELF_PROGRAM} --replace-needed libavutil.so.60 ./libavutil.so.60 ${LIB_FILE}
-                                RESULT_VARIABLE REPLACE_RESULT
-                                OUTPUT_QUIET
-                                ERROR_QUIET
-                            )
-                            
-                            if(REPLACE_RESULT EQUAL 0)
-                                message(STATUS "    ✓ Replaced libavutil.so.60 with relative path")
-                            else()
-                                message(STATUS "    Warning: Failed to replace dependency path")
-                            endif()
-                        else()
-                            message(STATUS "    ✗ libavutil.so.60 not found in target directory!")
-                        endif()
-                    endif()
                 endif()
             endif()
         endforeach()
@@ -275,6 +252,69 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         if(CHMOD_RESULT EQUAL 0)
             message(STATUS "✓ Created wrapper script: run_encore.sh")
             message(STATUS "  Use ./run_encore.sh instead of ./Encore to run the application")
+        endif()
+    endif()
+    
+    # Create comprehensive symlinks to handle all possible dependency naming
+    message(STATUS "Creating comprehensive symlinks for dependency resolution...")
+    
+    # Create additional symlinks that might be needed
+    set(SYMLINK_MAPPINGS
+        "libavutil.so;libavutil.so.60"
+        "libswresample.so;libswresample.so.6"
+        "libavcodec.so;libavcodec.so.62"
+        "libavformat.so;libavformat.so.62"
+        "libswscale.so;libswscale.so.9"
+        "libavfilter.so;libavfilter.so.11"
+        "libavdevice.so;libavdevice.so.62"
+    )
+    
+    foreach(MAPPING ${SYMLINK_MAPPINGS})
+        string(REPLACE ";" "," MAPPING_COMMA ${MAPPING})
+        string(REPLACE "," ";" MAPPING_LIST ${MAPPING_COMMA})
+        list(GET MAPPING_LIST 0 SYMLINK_NAME)
+        list(GET MAPPING_LIST 1 TARGET_NAME)
+        
+        set(SYMLINK_PATH "${TARGET_DIR}/${SYMLINK_NAME}")
+        set(TARGET_PATH "${TARGET_DIR}/${TARGET_NAME}")
+        
+        if(EXISTS ${TARGET_PATH})
+            if(NOT EXISTS ${SYMLINK_PATH})
+                message(STATUS "  Creating symlink: ${SYMLINK_NAME} -> ${TARGET_NAME}")
+                execute_process(
+                    COMMAND ${CMAKE_COMMAND} -E create_symlink ${TARGET_NAME} ${SYMLINK_NAME}
+                    WORKING_DIRECTORY ${TARGET_DIR}
+                    RESULT_VARIABLE SYMLINK_RESULT
+                )
+                if(SYMLINK_RESULT EQUAL 0)
+                    message(STATUS "    ✓ Symlink created successfully")
+                else()
+                    message(STATUS "    ✗ Failed to create symlink")
+                endif()
+            else()
+                message(STATUS "  Symlink already exists: ${SYMLINK_NAME}")
+            endif()
+        else()
+            message(STATUS "  Target ${TARGET_NAME} not found, skipping symlink")
+        endif()
+    endforeach()
+    
+    # Final test - try to run ldd on libswresample.so.6 one more time
+    find_program(LDD_PROGRAM ldd)
+    if(LDD_PROGRAM AND EXISTS "${TARGET_DIR}/libswresample.so.6")
+        message(STATUS "Final dependency check for libswresample.so.6:")
+        execute_process(
+            COMMAND env LD_LIBRARY_PATH=${TARGET_DIR} ${LDD_PROGRAM} ${TARGET_DIR}/libswresample.so.6
+            OUTPUT_VARIABLE FINAL_LDD_OUTPUT
+            ERROR_VARIABLE FINAL_LDD_ERROR
+            RESULT_VARIABLE FINAL_LDD_RESULT
+        )
+        if(FINAL_LDD_RESULT EQUAL 0)
+            message(STATUS "Dependencies with LD_LIBRARY_PATH set:")
+            string(REPLACE "\n" "\n  " FINAL_LDD_FORMATTED "  ${FINAL_LDD_OUTPUT}")
+            message(STATUS "${FINAL_LDD_FORMATTED}")
+        else()
+            message(STATUS "ldd still failed: ${FINAL_LDD_ERROR}")
         endif()
     endif()
     
