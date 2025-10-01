@@ -171,46 +171,111 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         message(STATUS "ldd not found or libswresample.so.6 missing, cannot check dependencies")
     endif()
     
-    # Fix RPATH on all copied libraries to ensure they can find each other
+    # Fix RPATH and dependencies on all copied libraries
     find_program(PATCHELF_PROGRAM patchelf)
     find_program(CHRPATH_PROGRAM chrpath)
     
-    if(PATCHELF_PROGRAM OR CHRPATH_PROGRAM)
-        message(STATUS "Fixing RPATH on copied libraries...")
+    if(PATCHELF_PROGRAM)
+        message(STATUS "Fixing RPATH and dependencies on copied libraries...")
         file(GLOB COPIED_LIBS "${TARGET_DIR}/lib*.so*")
         foreach(LIB_FILE ${COPIED_LIBS})
             get_filename_component(LIB_NAME ${LIB_FILE} NAME)
             
             # Skip symlinks for RPATH modification
             if(NOT IS_SYMLINK ${LIB_FILE})
-                message(STATUS "  Setting RPATH on ${LIB_NAME}")
+                message(STATUS "  Processing ${LIB_NAME}")
                 
-                if(PATCHELF_PROGRAM)
-                    execute_process(
-                        COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN:$ORIGIN/..' ${LIB_FILE}
-                        RESULT_VARIABLE RPATH_RESULT
-                        OUTPUT_QUIET
-                        ERROR_QUIET
-                    )
-                elseif(CHRPATH_PROGRAM)
-                    execute_process(
-                        COMMAND ${CHRPATH_PROGRAM} -r '$ORIGIN:$ORIGIN/..' ${LIB_FILE}
-                        RESULT_VARIABLE RPATH_RESULT
-                        OUTPUT_QUIET
-                        ERROR_QUIET
-                    )
-                endif()
+                # Set RPATH to look in current directory first
+                execute_process(
+                    COMMAND ${PATCHELF_PROGRAM} --set-rpath '$ORIGIN' ${LIB_FILE}
+                    RESULT_VARIABLE RPATH_RESULT
+                    OUTPUT_QUIET
+                    ERROR_QUIET
+                )
                 
-                if(NOT RPATH_RESULT EQUAL 0)
-                    message(STATUS "    Warning: Failed to set RPATH on ${LIB_NAME}")
+                if(RPATH_RESULT EQUAL 0)
+                    message(STATUS "    ✓ RPATH set successfully")
                 else()
-                    message(STATUS "    ✓ RPATH set successfully on ${LIB_NAME}")
+                    message(STATUS "    Warning: Failed to set RPATH")
                 endif()
+                
+                # Special handling for libswresample.so.6 - check and fix its dependencies
+                if(LIB_NAME STREQUAL "libswresample.so.6")
+                    message(STATUS "    Special handling for libswresample.so.6")
+                    
+                    # Check current dependencies
+                    execute_process(
+                        COMMAND ${PATCHELF_PROGRAM} --print-needed ${LIB_FILE}
+                        OUTPUT_VARIABLE NEEDED_LIBS
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                    )
+                    message(STATUS "    Current dependencies: ${NEEDED_LIBS}")
+                    
+                    # If it's looking for libavutil.so.60, make sure the file exists and is accessible
+                    if(NEEDED_LIBS MATCHES "libavutil\\.so\\.60")
+                        if(EXISTS "${TARGET_DIR}/libavutil.so.60")
+                            message(STATUS "    ✓ libavutil.so.60 exists in target directory")
+                            
+                            # Try to replace the dependency with a relative path
+                            execute_process(
+                                COMMAND ${PATCHELF_PROGRAM} --replace-needed libavutil.so.60 ./libavutil.so.60 ${LIB_FILE}
+                                RESULT_VARIABLE REPLACE_RESULT
+                                OUTPUT_QUIET
+                                ERROR_QUIET
+                            )
+                            
+                            if(REPLACE_RESULT EQUAL 0)
+                                message(STATUS "    ✓ Replaced libavutil.so.60 with relative path")
+                            else()
+                                message(STATUS "    Warning: Failed to replace dependency path")
+                            endif()
+                        else()
+                            message(STATUS "    ✗ libavutil.so.60 not found in target directory!")
+                        endif()
+                    endif()
+                endif()
+            endif()
+        endforeach()
+    elseif(CHRPATH_PROGRAM)
+        message(STATUS "Using chrpath to fix RPATH...")
+        file(GLOB COPIED_LIBS "${TARGET_DIR}/lib*.so.[0-9]*")
+        foreach(LIB_FILE ${COPIED_LIBS})
+            get_filename_component(LIB_NAME ${LIB_FILE} NAME)
+            message(STATUS "  Setting RPATH on ${LIB_NAME}")
+            
+            execute_process(
+                COMMAND ${CHRPATH_PROGRAM} -r '$ORIGIN' ${LIB_FILE}
+                RESULT_VARIABLE RPATH_RESULT
+                OUTPUT_QUIET
+                ERROR_QUIET
+            )
+            
+            if(RPATH_RESULT EQUAL 0)
+                message(STATUS "    ✓ RPATH set successfully")
+            else()
+                message(STATUS "    Warning: Failed to set RPATH")
             endif()
         endforeach()
     else()
         message(STATUS "Neither patchelf nor chrpath found")
-        message(STATUS "Install patchelf or chrpath for better library compatibility")
+        message(STATUS "Install patchelf for better library compatibility")
+        
+        # As a last resort, create an LD_LIBRARY_PATH wrapper script
+        message(STATUS "Creating LD_LIBRARY_PATH wrapper script...")
+        set(WRAPPER_SCRIPT "${TARGET_DIR}/run_encore.sh")
+        file(WRITE ${WRAPPER_SCRIPT} "#!/bin/bash\n")
+        file(APPEND ${WRAPPER_SCRIPT} "export LD_LIBRARY_PATH=\"$(dirname \"$0\"):$LD_LIBRARY_PATH\"\n")
+        file(APPEND ${WRAPPER_SCRIPT} "exec \"$(dirname \"$0\")/Encore\" \"$@\"\n")
+        
+        execute_process(
+            COMMAND chmod +x ${WRAPPER_SCRIPT}
+            RESULT_VARIABLE CHMOD_RESULT
+        )
+        
+        if(CHMOD_RESULT EQUAL 0)
+            message(STATUS "✓ Created wrapper script: run_encore.sh")
+            message(STATUS "  Use ./run_encore.sh instead of ./Encore to run the application")
+        endif()
     endif()
     
     message(STATUS "Copied ${COPIED_COUNT} FFmpeg major version .so files and created symlinks")
