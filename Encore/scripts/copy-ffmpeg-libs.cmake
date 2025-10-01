@@ -6,13 +6,14 @@ set(FFMPEG_LIB_DIR "$ENV{FFMPEG_LIB_DIR}")
 set(TARGET_DIR "$ENV{TARGET_DIR}")
 
 if(FFMPEG_LIB_DIR AND TARGET_DIR)
-    # Define the specific FFmpeg libraries we want (base .so files only, no versioned ones)
+    # Define the specific FFmpeg libraries we want (base .so files and specific versioned ones)
     set(FFMPEG_LIBS
         "libavcodec.so"
         "libavformat.so"
         "libavutil.so"
         "libswscale.so"
         "libswresample.so"
+        "libswresample.so.6"
         "libavfilter.so"
         "libavdevice.so"
     )
@@ -29,7 +30,7 @@ if(FFMPEG_LIB_DIR AND TARGET_DIR)
         endif()
     endforeach()
     
-    message(STATUS "Copied ${COPIED_COUNT} FFmpeg .so files (base versions only)")
+    message(STATUS "Copied ${COPIED_COUNT} FFmpeg .so files (base versions + libswresample.so.6)")
 else()
     message(STATUS "FFMPEG_LIB_DIR or TARGET_DIR not set")
 endif()
