@@ -138,7 +138,7 @@ int main(int argc, char *argv[]) {
         InitWindow(
             GetMonitorWidth(GetCurrentMonitor()) * 0.75f,
             GetMonitorHeight(GetCurrentMonitor()) * 0.75f,
-            "Encore"
+            "Encore DX"
         );
         SET_WINDOW_WINDOWED();
         MaximizeWindow();
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
         InitWindow(
             GetMonitorWidth(GetCurrentMonitor()),
             GetMonitorHeight(GetCurrentMonitor()),
-            "Encore"
+            "Encore DX"
         );
         SET_WINDOW_FULLSCREEN_BORDERLESS();
     }
