@@ -76,9 +76,14 @@ option(SUPPORT_FILEFORMAT_JPG "Support loading JPG as textures" ON)
 file(GLOB_RECURSE SRC_FILES "src/*.cpp" "include/*.cpp" "include/*.c")
 file(GLOB_RECURSE INC_FILES "include/*.h" "include/*.h*" "src/*.h")
 if (WIN32)
-add_executable(Encore ${SRC_FILES} ${INC_FILES} "resources.rc")
+add_executable(Encore ${SRC_FILES} ${INC_FILES} "resources.rc"
+        src/menus/SettingsSongPaths.cpp)
 else()
-add_executable(Encore ${SRC_FILES} ${INC_FILES})
+add_executable(Encore ${SRC_FILES} ${INC_FILES}
+        src/util/trackDownloader.cpp
+        src/util/downloadOverlay.cpp
+        src/menus/DownloadSongs.cpp
+        src/leaderboard/leaderboard.cpp)
 endif()
 
 target_include_directories(Encore PRIVATE "include" "src" ${FFMPEG_INCLUDE_DIR})
@@ -184,7 +189,7 @@ ${IOKIT_FRAMEWORK}
 list(APPEND ENCORE_LIBRARIES "-liconv" "-lbz2" "-llzma")
 endif()
 if(WIN32)
-list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt)
+list(APPEND ENCORE_LIBRARIES zlibstatic bcrypt wininet urlmon)
 endif()
 if(UNIX AND NOT APPLE)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-fatal-warnings")

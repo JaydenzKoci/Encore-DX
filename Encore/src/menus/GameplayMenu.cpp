@@ -11,6 +11,7 @@
 #include "uiUnits.h"
 #include "song/audio.h"
 #include "song/songlist.h"
+#include "song/chart.h"
 #include "raymath.h"
 #include "raygui.h"
 #include "gameplay/enctime.h"
@@ -22,26 +23,130 @@
 #include "OvershellHelper.h"
 #include "settings-old.h"
 #include "settings.h"
+#include "leaderboard/leaderboard.h"
 
 
 GameplayMenu::GameplayMenu() {}
 GameplayMenu::~GameplayMenu() {}
 
+void GameplayMenu::DrawStreakPopEffect(int playerIndex, float centerX, float centerY, double currentTime) {
+    if (playerIndex < 0 || playerIndex >= 4) return;
+    
+    StreakPopEffect& effect = streakPopEffects[playerIndex];
+    if (!effect.active) return;
+    
+    double timeSinceTrigger = currentTime - effect.triggerTime;
+    if (timeSinceTrigger > STREAK_POP_DURATION) {
+        effect.active = false;
+        return;
+    }
+    
+    float progress = static_cast<float>(timeSinceTrigger / STREAK_POP_DURATION);
+    float easedProgress = getEasingFunction(EaseOutQuart)(progress);
+    
+    Units &u = Units::getInstance();
+    float minRadius = u.hinpct(0.015f);
+    float maxRadius = u.hinpct(0.055f);
+    float currentRadius = minRadius + (maxRadius - minRadius) * easedProgress;
+    
+    float maxThickness = u.hinpct(0.01f);
+    float minThickness = u.hinpct(0.002f);
+    float currentThickness = maxThickness - (maxThickness - minThickness) * easedProgress;
+    
+    unsigned char alpha = static_cast<unsigned char>(255 * (1.0f - easedProgress));
+    
+    Color ringColor = { 255, 255, 255, alpha };
+    DrawRing(
+        { centerX, centerY },
+        currentRadius - currentThickness,
+        currentRadius,
+        0.0f,
+        360.0f,
+        36,
+        ringColor
+    );
+}
+
+void GameplayMenu::CleanupAndSwitchToResults() {
+    TheGameRenderer.backgroundVideo.Stop();
+    TheGameRenderer.backgroundVideo.Unload();
+    
+    TheSongList.curSong->LoadAlbumArt();
+    
+    TheGameRenderer.midiLoaded = false;
+    TheGameRenderer.highwayInAnimation = false;
+    TheGameRenderer.highwayInEndAnim = false;
+    TheGameRenderer.songPlaying = false;
+    TheGameRenderer.highwayLevel = 0;
+    TheGameRenderer.streamsLoaded = false;
+    
+    TheSongTime.Stop();
+    TheSongTime.Reset();
+    
+    TheAudioManager.unloadStreams();
+    
+    for (int playerNum = 0; playerNum < ThePlayerManager.PlayersActive; playerNum++) {
+        Player& player = ThePlayerManager.GetActivePlayer(playerNum);
+        
+        if (TheSongList.curSong && TheSongList.curSong->parts[player.Instrument]) {
+            TheSongList.curSong->parts[player.Instrument]
+                ->charts[player.Difficulty].resetNotes();
+        }
+        
+        if (player.stats) {
+            player.stats->Paused = false;
+            player.stats->Overdrive = false;
+            player.stats->Mute = false;
+            player.stats->FAS = false;
+            player.stats->Overstrum = false;
+            player.stats->UpStrum = false;
+            player.stats->DownStrum = false;
+            player.stats->StrumNoFretTime = -1.0;
+            
+            std::fill(player.stats->HeldFrets.begin(), player.stats->HeldFrets.end(), false);
+            std::fill(player.stats->HeldFretsAlt.begin(), player.stats->HeldFretsAlt.end(), false);
+            std::fill(player.stats->OverhitFrets.begin(), player.stats->OverhitFrets.end(), false);
+            std::fill(player.stats->TapRegistered.begin(), player.stats->TapRegistered.end(), false);
+            std::fill(player.stats->LiftRegistered.begin(), player.stats->LiftRegistered.end(), false);
+            std::fill(player.stats->overdriveLanesHit.begin(), player.stats->overdriveLanesHit.end(), false);
+            
+            std::fill(player.stats->axesValues.begin(), player.stats->axesValues.end(), 0.0f);
+            std::fill(player.stats->buttonValues.begin(), player.stats->buttonValues.end(), 0);
+            std::fill(player.stats->axesValues2.begin(), player.stats->axesValues2.end(), 0.0f);
+        }
+    }
+    
+    if (ThePlayerManager.BandStats) {
+        ThePlayerManager.BandStats->ResetBandGameplayStats();
+        ThePlayerManager.BandStats->Paused = false;
+        ThePlayerManager.BandStats->PlayersInOverdrive = 0;
+    }
+    
+    TheMenuManager.SwitchScreen(RESULTS);
+}
+
 void ManagePausedGame(GameplayInputHandler inputHandler, Player &player) {
     PlayerGameplayStats *&stats = player.stats;
     stats->Paused = !stats->Paused;
     ThePlayerManager.BandStats->Paused = !ThePlayerManager.BandStats->Paused;
+    
     if (ThePlayerManager.BandStats->Paused) {
+        Encore::EncoreLog(LOG_INFO, TextFormat("PAUSED at songTime=%.2f s", TheSongTime.GetSongTime()));
+        
         TheAudioManager.pauseStreams();
         TheSongTime.Pause();
         TheGameRenderer.backgroundVideo.Pause();
     } else {
-        TheAudioManager.unpauseStreams();
-        TheSongTime.Resume();
-        TheGameRenderer.backgroundVideo.Resume();
-        for (int i = 0; i < (player.Difficulty == 3 ? 5 : 4); i++) {
-            inputHandler.handleInputs(player, i, -1);
+        if (TheSongTime.IsInResumeGracePeriod()) {
+            Encore::EncoreLog(LOG_INFO, "UNPAUSING during grace period - extending by 3 seconds");
+            TheSongTime.ExtendGracePeriod();
+        } else {
+            Encore::EncoreLog(LOG_INFO, "UNPAUSING - starting 3-second grace period");
+            TheSongTime.Resume();
         }
+        
+        TheAudioManager.unpauseStreams();
+        TheGameRenderer.ClearHeldInputs(player);
     }
 }
 
@@ -49,7 +154,6 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
     Encore::EncoreLog(LOG_DEBUG, TextFormat("Keyboard key %01i inputted on menu %s, action ", key, ToString(TheMenuManager.currentScreen), action) );
     Player &player = ThePlayerManager.GetActivePlayer(0);
     PlayerGameplayStats *&stats = player.stats;
-    SettingsOld &settingsMain = SettingsOld::getInstance();
     GameplayInputHandler inputHandler;
     if (!TheGameRenderer.streamsLoaded) {
         return;
@@ -58,16 +162,22 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
     if (action < 2) {
         // if the key action is NOT repeat (release is 0, press is 1)
         int lane = -2;
-        if (key == settingsMain.keybindPause && action == GLFW_PRESS) {
+        if (key == TheGameSettings.KeybindPause && action == GLFW_PRESS) {
             ManagePausedGame(inputHandler, player);
-        } else if ((key == settingsMain.keybindOverdrive
-                    || key == settingsMain.keybindOverdriveAlt)) {
-            inputHandler.handleInputs(player, -1, action);
-        } else if (!player.Bot) {
+        } else {
+            float rendererAlpha = TheGameRenderer.GetRendererAlpha(player.ActiveSlot);
+            if (rendererAlpha < 0.95f) {
+                return;
+            }
+        }
+            if ((key == TheGameSettings.KeybindOverdrive
+                        || key == TheGameSettings.KeybindOverdriveAlt)) {
+                inputHandler.handleInputs(player, -1, action);
+            } else if (!player.Bot) {
             if (player.Instrument != PlasticDrums) {
                 if (player.Difficulty == 3 || player.ClassicMode) {
                     for (int i = 0; i < 5; i++) {
-                        if (key == settingsMain.keybinds5K[i]
+                        if (key == TheGameSettings.Keybinds5K[i]
                             && !stats->HeldFretsAlt[i]) {
                             if (action == GLFW_PRESS) {
                                 stats->HeldFrets[i] = true;
@@ -76,7 +186,7 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
                                 stats->OverhitFrets[i] = false;
                             }
                             lane = i;
-                        } else if (key == settingsMain.keybinds5KAlt[i]
+                        } else if (key == TheGameSettings.Keybinds5KAlt[i]
                                    && !stats->HeldFrets[i]) {
                             if (action == GLFW_PRESS) {
                                 stats->HeldFretsAlt[i] = true;
@@ -89,7 +199,7 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
                     }
                 } else {
                     for (int i = 0; i < 4; i++) {
-                        if (key == settingsMain.keybinds4K[i]
+                        if (key == TheGameSettings.Keybinds4K[i]
                             && !stats->HeldFretsAlt[i]) {
                             if (action == GLFW_PRESS) {
                                 stats->HeldFrets[i] = true;
@@ -98,7 +208,7 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
                                 stats->OverhitFrets[i] = false;
                             }
                             lane = i;
-                        } else if (key == settingsMain.keybinds4KAlt[i]
+                        } else if (key == TheGameSettings.Keybinds4KAlt[i]
                                    && !stats->HeldFrets[i]) {
                             if (action == GLFW_PRESS) {
                                 stats->HeldFretsAlt[i] = true;
@@ -111,7 +221,7 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
                     }
                 }
                 if (player.ClassicMode) {
-                    if (key == settingsMain.keybindStrumUp) {
+                    if (key == TheGameSettings.KeybindStrumUp) {
                         if (action == GLFW_PRESS) {
                             lane = 8008135;
                             stats->UpStrum = true;
@@ -120,7 +230,7 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
                             stats->Overstrum = false;
                         }
                     }
-                    if (key == settingsMain.keybindStrumDown) {
+                    if (key == TheGameSettings.KeybindStrumDown) {
                         if (action == GLFW_PRESS) {
                             lane = 8008135;
                             stats->DownStrum = true;
@@ -138,9 +248,8 @@ void GameplayMenu::KeyboardInputCallback(int key, int scancode, int action, int 
             }
         }
     }
-};
+}
 void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state) {
-    SettingsOld &settingsMain = SettingsOld::getInstance();
     GameplayInputHandler inputHandler;
 
     if (TheMenuManager.currentScreen == SONG_SELECT) {
@@ -166,55 +275,58 @@ void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state)
         }
 
         double eventTime = TheSongTime.GetSongTime();
-        if (settingsMain.controllerPause >= 0) {
-            if (state.buttons[settingsMain.controllerPause]
-                != stats->buttonValues[settingsMain.controllerPause]) {
-                stats->buttonValues[settingsMain.controllerPause] =
-                    state.buttons[settingsMain.controllerPause];
-                if (state.buttons[settingsMain.controllerPause] == 1) {
+        if (TheGameSettings.ControllerPause >= 0) {
+            if (state.buttons[TheGameSettings.ControllerPause]
+                != stats->buttonValues[TheGameSettings.ControllerPause]) {
+                stats->buttonValues[TheGameSettings.ControllerPause] =
+                    state.buttons[TheGameSettings.ControllerPause];
+                if (state.buttons[TheGameSettings.ControllerPause] == 1) {
                     ManagePausedGame(inputHandler, player); // && !player.Bot
                 }
             }
         } else if (!player.Bot) {
-            if (state.axes[-(settingsMain.controllerPause + 1)]
-                != stats->axesValues[-(settingsMain.controllerPause + 1)]) {
-                stats->axesValues[-(settingsMain.controllerPause + 1)] =
-                    state.axes[-(settingsMain.controllerPause + 1)];
-                if (state.axes[-(settingsMain.controllerPause + 1)]
-                    == 1.0f * (float)settingsMain.controllerPauseAxisDirection) {
+            if (state.axes[-(TheGameSettings.ControllerPause + 1)]
+                != stats->axesValues[-(TheGameSettings.ControllerPause + 1)]) {
+                stats->axesValues[-(TheGameSettings.ControllerPause + 1)] =
+                    state.axes[-(TheGameSettings.ControllerPause + 1)];
+                if (state.axes[-(TheGameSettings.ControllerPause + 1)]
+                    == 1.0f * (float)TheGameSettings.ControllerPauseAxisDirection) {
                 }
             }
         } //  && !player.Bot
-        if (settingsMain.controllerOverdrive >= 0) {
-            if (state.buttons[settingsMain.controllerOverdrive]
-                != stats->buttonValues[settingsMain.controllerOverdrive]) {
-                stats->buttonValues[settingsMain.controllerOverdrive] =
-                    state.buttons[settingsMain.controllerOverdrive];
-                inputHandler.handleInputs(
-                    player, -1, state.buttons[settingsMain.controllerOverdrive]
-                );
-            } // // if (!player.Bot)
-        } else {
-            if (state.axes[-(settingsMain.controllerOverdrive + 1)]
-                != stats->axesValues[-(settingsMain.controllerOverdrive + 1)]) {
-                stats->axesValues[-(settingsMain.controllerOverdrive + 1)] =
-                    state.axes[-(settingsMain.controllerOverdrive + 1)];
-                if (state.axes[-(settingsMain.controllerOverdrive + 1)]
-                    == 1.0f * (float)settingsMain.controllerOverdriveAxisDirection) {
-                    inputHandler.handleInputs(player, -1, GLFW_PRESS);
-                } else {
-                    inputHandler.handleInputs(player, -1, GLFW_RELEASE);
+        float rendererAlpha = TheGameRenderer.GetRendererAlpha(player.ActiveSlot);
+        if (rendererAlpha >= 0.95f) {
+            if (TheGameSettings.ControllerOverdrive >= 0) {
+                if (state.buttons[TheGameSettings.ControllerOverdrive]
+                    != stats->buttonValues[TheGameSettings.ControllerOverdrive]) {
+                    stats->buttonValues[TheGameSettings.ControllerOverdrive] =
+                        state.buttons[TheGameSettings.ControllerOverdrive];
+                    inputHandler.handleInputs(
+                        player, -1, state.buttons[TheGameSettings.ControllerOverdrive]
+                    );
+                } // // if (!player.Bot)
+            } else {
+                if (state.axes[-(TheGameSettings.ControllerOverdrive + 1)]
+                    != stats->axesValues[-(TheGameSettings.ControllerOverdrive + 1)]) {
+                    stats->axesValues[-(TheGameSettings.ControllerOverdrive + 1)] =
+                        state.axes[-(TheGameSettings.ControllerOverdrive + 1)];
+                    if (state.axes[-(TheGameSettings.ControllerOverdrive + 1)]
+                        == 1.0f * (float)TheGameSettings.ControllerOverdriveAxisDirection) {
+                        inputHandler.handleInputs(player, -1, GLFW_PRESS);
+                    } else {
+                        inputHandler.handleInputs(player, -1, GLFW_RELEASE);
+                    }
                 }
             }
         }
-        if ((player.Difficulty == 3 || player.ClassicMode) && !player.Bot) {
+        if ((player.Difficulty == 3 || player.ClassicMode) && !player.Bot && rendererAlpha >= 0.95f) {
             int lane = -2;
             int action = -2;
             for (int i = 0; i < 5; i++) {
-                if (settingsMain.controller5K[i] >= 0) {
-                    if (state.buttons[settingsMain.controller5K[i]]
-                        != stats->buttonValues[settingsMain.controller5K[i]]) {
-                        if (state.buttons[settingsMain.controller5K[i]] == 1
+                if (TheGameSettings.Controller5K[i] >= 0) {
+                    if (state.buttons[TheGameSettings.Controller5K[i]]
+                        != stats->buttonValues[TheGameSettings.Controller5K[i]]) {
+                        if (state.buttons[TheGameSettings.Controller5K[i]] == 1
                             && !stats->HeldFrets[i])
                             stats->HeldFrets[i] = true;
                         else if (stats->HeldFrets[i]) {
@@ -222,17 +334,17 @@ void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state)
                             stats->OverhitFrets[i] = false;
                         }
                         inputHandler.handleInputs(
-                            player, i, state.buttons[settingsMain.controller5K[i]]
+                            player, i, state.buttons[TheGameSettings.Controller5K[i]]
                         );
-                        stats->buttonValues[settingsMain.controller5K[i]] =
-                            state.buttons[settingsMain.controller5K[i]];
+                        stats->buttonValues[TheGameSettings.Controller5K[i]] =
+                            state.buttons[TheGameSettings.Controller5K[i]];
                         lane = i;
                     }
                 } else {
-                    if (state.axes[-(settingsMain.controller5K[i] + 1)]
-                        != stats->axesValues[-(settingsMain.controller5K[i] + 1)]) {
-                        if (state.axes[-(settingsMain.controller5K[i] + 1)]
-                                == 1.0f * (float)settingsMain.controller5KAxisDirection[i]
+                    if (state.axes[-(TheGameSettings.Controller5K[i] + 1)]
+                        != stats->axesValues[-(TheGameSettings.Controller5K[i] + 1)]) {
+                        if (state.axes[-(TheGameSettings.Controller5K[i] + 1)]
+                                == 1.0f * (float)TheGameSettings.Controller5KAxisDirection[i]
                             && !stats->HeldFrets[i]) {
                             stats->HeldFrets[i] = true;
                             inputHandler.handleInputs(player, i, GLFW_PRESS);
@@ -241,8 +353,8 @@ void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state)
                             stats->OverhitFrets[i] = false;
                             inputHandler.handleInputs(player, i, GLFW_RELEASE);
                         }
-                        stats->axesValues[-(settingsMain.controller5K[i] + 1)] =
-                            state.axes[-(settingsMain.controller5K[i] + 1)];
+                        stats->axesValues[-(TheGameSettings.Controller5K[i] + 1)] =
+                            state.axes[-(TheGameSettings.Controller5K[i] + 1)];
                         lane = i;
                     }
                 }
@@ -268,28 +380,28 @@ void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state)
                 stats->DownStrum = false;
                 inputHandler.handleInputs(player, 8008135, GLFW_RELEASE);
             }
-        } else if (!player.Bot) {
+        } else if (!player.Bot && rendererAlpha >= 0.95f) {
             for (int i = 0; i < 4; i++) {
-                if (settingsMain.controller4K[i] >= 0) {
-                    if (state.buttons[settingsMain.controller4K[i]]
-                        != stats->buttonValues[settingsMain.controller4K[i]]) {
-                        if (state.buttons[settingsMain.controller4K[i]] == 1)
+                if (TheGameSettings.Controller4K[i] >= 0) {
+                    if (state.buttons[TheGameSettings.Controller4K[i]]
+                        != stats->buttonValues[TheGameSettings.Controller4K[i]]) {
+                        if (state.buttons[TheGameSettings.Controller4K[i]] == 1)
                             stats->HeldFrets[i] = true;
                         else {
                             stats->HeldFrets[i] = false;
                             stats->OverhitFrets[i] = false;
                         }
                         inputHandler.handleInputs(
-                            player, i, state.buttons[settingsMain.controller4K[i]]
+                            player, i, state.buttons[TheGameSettings.Controller4K[i]]
                         );
-                        stats->buttonValues[settingsMain.controller4K[i]] =
-                            state.buttons[settingsMain.controller4K[i]];
+                        stats->buttonValues[TheGameSettings.Controller4K[i]] =
+                            state.buttons[TheGameSettings.Controller4K[i]];
                     }
                 } else {
-                    if (state.axes[-(settingsMain.controller4K[i] + 1)]
-                        != stats->axesValues[-(settingsMain.controller4K[i] + 1)]) {
-                        if (state.axes[-(settingsMain.controller4K[i] + 1)]
-                            == 1.0f * (float)settingsMain.controller4KAxisDirection[i]) {
+                    if (state.axes[-(TheGameSettings.Controller4K[i] + 1)]
+                        != stats->axesValues[-(TheGameSettings.Controller4K[i] + 1)]) {
+                        if (state.axes[-(TheGameSettings.Controller4K[i] + 1)]
+                            == 1.0f * (float)TheGameSettings.Controller4KAxisDirection[i]) {
                             stats->HeldFrets[i] = true;
                             inputHandler.handleInputs(player, i, GLFW_PRESS);
                         } else {
@@ -297,8 +409,8 @@ void GameplayMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state)
                             stats->OverhitFrets[i] = false;
                             inputHandler.handleInputs(player, i, GLFW_RELEASE);
                         }
-                        stats->axesValues[-(settingsMain.controller4K[i] + 1)] =
-                            state.axes[-(settingsMain.controller4K[i] + 1)];
+                        stats->axesValues[-(TheGameSettings.Controller4K[i] + 1)] =
+                            state.axes[-(TheGameSettings.Controller4K[i] + 1)];
                     }
                 }
             }
@@ -316,7 +428,9 @@ void GameplayMenu::DrawScorebox(Units &u, Assets &assets, float scoreY) {
     float hudOffsetX = 0.0f;
     float hudOffsetY = 0.0f;
     
-    switch (TheGameSettings.HUDPosition) {
+    int effectiveHUDPosition = (ThePlayerManager.PlayersActive > 1) ? 0 : TheGameSettings.HUDPosition;
+    
+    switch (effectiveHUDPosition) {
         case 0:
             hudOffsetX = 0.0f;
             hudOffsetY = 0.0f;
@@ -373,7 +487,9 @@ void GameplayMenu::DrawTimerbox(Units &u, Assets &assets, float scoreY) {
     float hudOffsetX = 0.0f;
     float hudOffsetY = 0.0f;
     
-    switch (TheGameSettings.HUDPosition) {
+    int effectiveHUDPosition = (ThePlayerManager.PlayersActive > 1) ? 0 : TheGameSettings.HUDPosition;
+    
+    switch (effectiveHUDPosition) {
         case 0:
             hudOffsetX = 0.0f;
             hudOffsetY = 0.0f;
@@ -519,6 +635,134 @@ void GameplayMenu::DrawGameplayStars(
     }
 }
 
+void GameplayMenu::DrawInstrumentIcon(Units &u, Assets &assets, float scoreY, double songTime) {
+    extern Encore::Settings TheGameSettings;
+    
+    if (!TheGameSettings.ShowInstrumentIcon) {
+        return;
+    }
+    
+    if (ThePlayerManager.PlayersActive != 1) {
+        return;
+    }
+    
+    Player &player = ThePlayerManager.GetActivePlayer(0);
+    
+    if (player.Instrument != PartGuitar && player.Instrument != PlasticGuitar) {
+        return;
+    }
+    
+    Chart &curChart = TheSongList.curSong->parts[player.Instrument]->charts[player.Difficulty];
+    
+    if (!curChart.hasInstrumentTextEvents()) {
+        return;
+    }
+    
+    InstrumentType currentType = curChart.getCurrentInstrumentType(songTime);
+    
+    float iconSize = u.hinpct(0.10f);
+    
+    float iconAlpha = 1.0f;
+    if (TheGameSettings.TrackFading && ThePlayerManager.PlayersActive == 1) {
+        iconAlpha = TheGameRenderer.GetRendererAlpha(0);
+    }
+    
+    if (iconAlpha < 0.01f) {
+        return;
+    }
+    
+    float iconX, iconY;
+    
+    Camera3D worldCamera = TheGameRenderer.cameraVectors[ThePlayerManager.PlayersActive - 1][TheGameRenderer.cameraSel];
+    Vector2 trackRightEdge = GetWorldToScreen({ 2.5f, 0.0f, 2.0f }, worldCamera);
+    Vector2 trackLeftEdge = GetWorldToScreen({ -2.5f, 0.0f, 2.0f }, worldCamera);
+    float trackRightX = trackRightEdge.x - TheGameRenderer.renderPos;
+    float trackLeftX = trackLeftEdge.x - TheGameRenderer.renderPos;
+    
+    int iconPosition = TheGameSettings.InstrumentIconPosition;
+    
+    float padding = u.hinpct(0.02f);
+    
+    if (iconPosition == 2 || iconPosition == 3) {
+        iconSize = u.hinpct(0.09f);
+    }
+    
+    switch (iconPosition) {
+        case 0:
+            iconX = trackLeftX - iconSize - padding;
+            iconY = GetScreenHeight() * 0.5f - iconSize * 0.5f;
+            break;
+        case 1:
+            iconX = trackRightX + padding;
+            iconY = GetScreenHeight() * 0.5f - iconSize * 0.5f;
+            break;
+        case 2:
+            iconX = trackLeftX - iconSize - padding;
+            iconY = GetScreenHeight() - iconSize;
+            break;
+        case 3:
+            iconX = trackRightX + padding;
+            iconY = GetScreenHeight() - iconSize;
+            break;
+        default:
+            iconX = trackLeftX - iconSize - padding;
+            iconY = GetScreenHeight() * 0.5f - iconSize * 0.5f;
+            break;
+    }
+    
+    Texture2D iconTexture;
+    if (currentType == InstrumentType::Guitar) {
+        iconTexture = assets.InstIcons[2];
+    } else {
+        iconTexture = assets.InstIcons[3];
+    }
+    
+    unsigned char alpha = (unsigned char)(iconAlpha * 255);
+    Color iconColor = { 255, 255, 255, alpha };
+    
+    Rectangle srcRect = { 0, 0, (float)iconTexture.width, (float)iconTexture.height };
+    Rectangle destRect = { iconX, iconY, iconSize, iconSize };
+    DrawTexturePro(iconTexture, srcRect, destRect, { 0, 0 }, 0, iconColor);
+}
+
+void GameplayMenu::DrawNewHighScoreNotification(Units &u, Assets &assets, double currentTime) {
+    if (!highScoreEffect.triggered) {
+        return;
+    }
+    
+    double timeSinceTrigger = currentTime - highScoreEffect.triggerTime;
+    
+    float displayDuration = 3.0f;
+    float fadeOutDuration = 0.5f;
+    
+    if (timeSinceTrigger > displayDuration) {
+        return;
+    }
+    
+    float bgAlpha = 1.0f;
+    if (timeSinceTrigger > displayDuration - fadeOutDuration) {
+        bgAlpha = (displayDuration - timeSinceTrigger) / fadeOutDuration;
+        if (bgAlpha < 0) bgAlpha = 0;
+    }
+    
+    const char* text = "New High Score";
+    float fontSize = u.hinpct(0.05f);
+    Vector2 textSize = MeasureTextEx(assets.rubikBold, text, fontSize, 0);
+    
+    float textX = (GetScreenWidth() - textSize.x) / 2;
+    float textY = GetScreenHeight() * 0.20f;
+    
+    float padding = u.hinpct(0.015f);
+    float bgY = textY - padding;
+    float bgHeight = textSize.y + padding * 2;
+    
+    unsigned char bgAlphaChar = (unsigned char)(bgAlpha * 180);
+    DrawRectangle(0, bgY, GetScreenWidth(), bgHeight, Color{0, 0, 0, bgAlphaChar});
+    
+    unsigned char textAlpha = (unsigned char)(bgAlpha * 255);
+    DrawTextEx(assets.rubikBold, text, {textX, textY}, fontSize, 0, Color{255, 255, 255, textAlpha});
+}
+
 unsigned char BeatToCharViaTickThing(
     int tick, int MinBrightness, int MaxBrightness, int QuarterNoteLength
 ) {
@@ -535,10 +779,35 @@ void GameplayMenu::Draw() {
 
     ClearBackground(BLACK);
 
+    if (TheSongTime.ShouldResumeVideoAfterGracePeriod() && TheGameRenderer.backgroundVideo.IsLoaded()) {
+        Encore::EncoreLog(LOG_INFO, "Grace period ended - resuming video playback");
+        TheGameRenderer.backgroundVideo.Play();
+        TheSongTime.SetVideoResumedAfterGracePeriod(true);
+    }
+
     TheGameRenderer.backgroundVideo.Update();
 
     if (TheGameRenderer.backgroundVideo.IsLoaded()) {
-        TheGameRenderer.backgroundVideo.Draw(0, 0, WHITE);
+        if (TheSongTime.IsInResumeGracePeriod()) {
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
+        } else if (TheGameRenderer.backgroundVideo.HasEnded()) {
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), BLACK);
+        } else {
+            float totalAlpha = 0.0f;
+            int activePlayerCount = 0;
+            for (int i = 0; i < ThePlayerManager.PlayersActive; i++) {
+                totalAlpha += TheGameRenderer.GetRendererAlpha(i);
+                activePlayerCount++;
+            }
+            float averageAlpha = (activePlayerCount > 0) ? (totalAlpha / activePlayerCount) : 1.0f;
+            
+            float fadeAmount = TheGameSettings.BackgroundFade / 100.0f;
+            float minBrightness = 1.0f - fadeAmount;
+            float videoBrightness = minBrightness + (fadeAmount * (1.0f - averageAlpha));
+            unsigned char brightness = (unsigned char)(videoBrightness * 255);
+            Color videoTint = { brightness, brightness, brightness, 255 };
+            TheGameRenderer.backgroundVideo.Draw(0, 0, videoTint);
+        }
     } else {
         GameMenu::DrawAlbumArtBackground(TheSongList.curSong->albumArtBlur);
     }
@@ -548,7 +817,9 @@ void GameplayMenu::Draw() {
         BackgroundColor = BeatToCharViaTickThing(TheGameRenderer.CurrentTick, 0, 8, 960);
     }
 
-    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color { 0, 0, 0, 128 });
+    if (TheGameSettings.BackgroundTint) {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color { 0, 0, 0, 128 });
+    }
     DrawRectangle(
         0, 0, GetScreenWidth(), GetScreenHeight(), Color { 255, 255, 255, BackgroundColor }
     );
@@ -557,23 +828,58 @@ void GameplayMenu::Draw() {
         TheAudioManager.loadStreams(TheSongList.curSong->stemsPath);
         TheGameRenderer.streamsLoaded = true;
     } else {
-        for (int i = 0; i < ThePlayerManager.PlayersActive; i++) {
-            for (auto &stream : TheAudioManager.loadedStreams) {
-                Player &player = ThePlayerManager.GetActivePlayer(i);
-                if ((player.ClassicMode ? player.Instrument - 5 : player.Instrument)
-                    == stream.instrument) {
+        for (auto &stream : TheAudioManager.loadedStreams) {
+            bool streamHandled = false;
+            
+            if (stream.instrument == 5) {
+                TheAudioManager.SetAudioStreamVolume(
+                    stream.handle,
+                    TheGameSettings.avMainVolume * TheGameSettings.avBackingTrackVolume
+                );
+                streamHandled = true;
+            }
+            else if (stream.instrument == 4) {
+                TheAudioManager.SetAudioStreamVolume(
+                    stream.handle,
+                    TheGameSettings.avMainVolume * TheGameSettings.avBackingTrackVolume
+                );
+                streamHandled = true;
+            }
+            
+            if (!streamHandled) {
+                for (int i = 0; i < ThePlayerManager.PlayersActive; i++) {
+                    Player &player = ThePlayerManager.GetActivePlayer(i);
+                    int playerInstrument = player.ClassicMode ? player.Instrument - 5 : player.Instrument;
+                    
+                    bool isPlayerStream = false;
+                    
+                    if (playerInstrument == stream.instrument) {
+                        isPlayerStream = true;
+                    }
+                    
+                    if (playerInstrument == 4) {
+                        if (stream.instrument == 3 || stream.instrument == 4) {
+                            isPlayerStream = true;
+                        }
+                    }
+                    
+                    if (isPlayerStream) {
+                        TheAudioManager.SetAudioStreamVolume(
+                            stream.handle,
+                            player.stats->Mute
+                                ? TheGameSettings.avMainVolume * TheGameSettings.avMuteVolume
+                                : TheGameSettings.avMainVolume
+                                    * TheGameSettings.avActiveInstrumentVolume
+                        );
+                        streamHandled = true;
+                        break;
+                    }
+                }
+                
+                if (!streamHandled) {
                     TheAudioManager.SetAudioStreamVolume(
                         stream.handle,
-                        player.stats->Mute
-                            ? TheGameSettings.avMainVolume * TheGameSettings.avMuteVolume
-                            : TheGameSettings.avMainVolume
-                                * TheGameSettings.avActiveInstrumentVolume
-                    );
-                } else {
-                    TheAudioManager.SetAudioStreamVolume(
-                        stream.handle,
-                        TheGameSettings.avMainVolume
-                            * TheGameSettings.avInactiveInstrumentVolume
+                        TheGameSettings.avMainVolume * TheGameSettings.avInactiveInstrumentVolume
                     );
                 }
             }
@@ -585,18 +891,8 @@ void GameplayMenu::Draw() {
             TheGameRenderer.LowerHighway();
         }
         if (TheSongTime.SongComplete()) {
-            TheGameRenderer.backgroundVideo.Unload();
-            TheSongList.curSong->LoadAlbumArt();
-            TheGameRenderer.midiLoaded = false;
-            TheGameRenderer.highwayInAnimation = false;
-            TheGameRenderer.songPlaying = false;
-            TheGameRenderer.highwayLevel = 0;
-            TheSongTime.Stop();
-            if (TheGameRenderer.streamsLoaded) {
-                TheAudioManager.unloadStreams();
-                TheGameRenderer.streamsLoaded = false;
-            }
-            TheMenuManager.SwitchScreen(RESULTS);
+            float songPlayed = TheSongTime.GetSongLength();
+            CleanupAndSwitchToResults();
             Encore::EncoreLog(LOG_INFO, TextFormat("Song ended at at %f", songPlayed));
             return;
         }
@@ -618,6 +914,35 @@ void GameplayMenu::Draw() {
             TheSongTime.GetSongTime(),
             *TheSongList.curSong
         );
+        
+        Player& player = ThePlayerManager.GetActivePlayer(pnum);
+        if (pnum < 4) {
+            int currentCombo = player.stats->Combo;
+            StreakPopEffect& effect = streakPopEffects[pnum];
+            
+            int maxComboForMeter = player.stats->maxMultForMeter() * 10;
+            
+            if (currentCombo > 0 && currentCombo % 10 == 0 && currentCombo != effect.lastCombo 
+                && currentCombo <= maxComboForMeter) {
+                if (currentCombo > effect.lastCombo) {
+                    effect.active = true;
+                    effect.triggerTime = curTime;
+                }
+            }
+            effect.lastCombo = currentCombo;
+            
+            if (effect.active) {
+                Vector3 multMeterWorldPos = { 0.0f, 0.0f, 1.1f };
+                Camera3D worldCamera = TheGameRenderer.cameraVectors[ThePlayerManager.PlayersActive - 1][TheGameRenderer.cameraSel];
+                Vector2 multMeterScreenPos = GetWorldToScreen(multMeterWorldPos, worldCamera);
+                
+                float effectCenterX = multMeterScreenPos.x - TheGameRenderer.renderPos;
+                float effectCenterY = multMeterScreenPos.y;
+                
+                DrawStreakPopEffect(pnum, effectCenterX, effectCenterY, curTime);
+            }
+        }
+        
         std::string NameText = ThePlayerManager.GetActivePlayer(pnum).Name;
         if (ThePlayerManager.GetActivePlayer(pnum).Bot) NameText.append(" - AUTOPLAY");
         float CenterPosForText =
@@ -653,6 +978,81 @@ void GameplayMenu::Draw() {
             0,
             headerUsernameColor
         );
+        
+        if (TheGameSettings.TrackFading && pnum < TheGameRenderer.playerFadeStates.size()) {
+            auto& fadeState = TheGameRenderer.playerFadeStates[pnum];
+            if (fadeState.showCountdown && fadeState.nextNoteTime > 0 && fadeState.isFadedOut) {
+                double currentTime = TheSongTime.GetSongTime();
+                double timeUntilNextNote = fadeState.nextNoteTime - currentTime;
+                
+                double countdownTime = timeUntilNextNote - 3.0;
+                
+                if (timeUntilNextNote > 0 && countdownTime > 0) {
+                    if (fadeState.countdownStartTime == 0.0) {
+                        fadeState.countdownStartTime = currentTime;
+                    }
+                    
+                    float ringSize = u.hinpct(0.08f);
+                    float ringX = CenterPosForText - (ringSize / 2) - TheGameRenderer.renderPos;
+                    float ringY = GetScreenHeight() - u.hinpct(0.04) - ringSize - u.hinpct(0.02f);
+                    
+                    int seconds = (int)ceil(countdownTime);
+                    if (seconds < 1) seconds = 1;
+                    if (seconds > 99) seconds = 99;
+                    
+                    float alpha = 255.0f;
+                    
+                    float fadeInDuration = 0.5f;
+                    double timeSinceCountdownStart = currentTime - fadeState.countdownStartTime;
+                    if (timeSinceCountdownStart < fadeInDuration) {
+                        float fadeInAlpha = 255.0f * (timeSinceCountdownStart / fadeInDuration);
+                        alpha = fadeInAlpha;
+                    }
+                    
+                    if (countdownTime <= 1.0) {
+                        float fadeOutAlpha = 255.0f * countdownTime;
+                        if (fadeOutAlpha < alpha) {
+                            alpha = fadeOutAlpha;
+                        }
+                    }
+                    
+                    if (alpha < 0) alpha = 0;
+                    if (alpha > 255) alpha = 255;
+                    
+                    Color ringColor = { 255, 255, 255, (unsigned char)alpha };
+                    Color textColor = { 255, 255, 255, (unsigned char)alpha };
+                    
+                    if (assets.CountInTexture.id > 0) {
+                        DrawTexturePro(
+                            assets.CountInTexture,
+                            { 0, 0, (float)assets.CountInTexture.width, (float)assets.CountInTexture.height },
+                            { ringX, ringY, ringSize, ringSize },
+                            { 0, 0 },
+                            0.0f,
+                            ringColor
+                        );
+                    } else {
+                        DrawRectangle(ringX, ringY, ringSize, ringSize, { 255, 0, 0, (unsigned char)alpha });
+                    }
+                    
+                    const char* countdownText = TextFormat("%d", seconds);
+                    float countdownFontSize = u.hinpct(0.03f);
+                    Vector2 countdownTextSize = MeasureTextEx(assets.rubikBold, countdownText, countdownFontSize, 0);
+                    
+                    DrawTextEx(
+                        assets.rubikBold,
+                        countdownText,
+                        { ringX + (ringSize - countdownTextSize.x) / 2,
+                          ringY + (ringSize - countdownTextSize.y) / 2 },
+                        countdownFontSize,
+                        0,
+                        textColor
+                    );
+                } else {
+                    fadeState.countdownStartTime = 0.0;
+                }
+            }
+        }
     }
 
     extern Encore::Settings TheGameSettings;
@@ -660,7 +1060,9 @@ void GameplayMenu::Draw() {
     float hudOffsetX = 0.0f;
     float hudOffsetY = 0.0f;
     
-    switch (TheGameSettings.HUDPosition) {
+    int effectiveHUDPosition = (ThePlayerManager.PlayersActive > 1) ? 0 : TheGameSettings.HUDPosition;
+    
+    switch (effectiveHUDPosition) {
         case 0:
             hudOffsetX = 0.0f;
             hudOffsetY = 0.0f;
@@ -690,6 +1092,15 @@ void GameplayMenu::Draw() {
     DrawGameplayStars(u, assets, scorePos, starY);
     DrawTimerbox(u, assets, scoreY);
     DrawScorebox(u, assets, scoreY);
+    DrawInstrumentIcon(u, assets, scoreY, TheSongTime.GetSongTime());
+    
+    if (highScoreEffect.highScoreLoaded && !highScoreEffect.triggered && highScoreEffect.previousHighScore > 0) {
+        if (ThePlayerManager.BandStats->Score > highScoreEffect.previousHighScore) {
+            highScoreEffect.triggered = true;
+            highScoreEffect.triggerTime = curTime;
+        }
+    }
+    DrawNewHighScoreNotification(u, assets, curTime);
 
     float SongNameWidth = MeasureTextEx(
                               assets.rubikBoldItalic,
@@ -852,6 +1263,8 @@ void GameplayMenu::Draw() {
 
     float floatSongLength = TheAudioManager.GetMusicTimePlayed();
 
+
+
     if (ThePlayerManager.BandStats->Paused) {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Color { 0, 0, 0, 80 });
         encOS::DrawTopOvershell(0.2f);
@@ -866,9 +1279,13 @@ void GameplayMenu::Draw() {
         Rectangle QuitBox = { Left, Top + (Spacing * 2), Width, Height };
 
         if (GuiButton(ResumeBox, "Resume")) {
+            if (TheSongTime.IsInResumeGracePeriod()) {
+                TheSongTime.ExtendGracePeriod();
+            } else {
+                TheSongTime.Resume();
+            }
             TheAudioManager.unpauseStreams();
-            TheSongTime.Resume();
-            TheGameRenderer.backgroundVideo.Resume();
+            
             ThePlayerManager.BandStats->Paused = false;
             for (int playerNum = 0; playerNum < ThePlayerManager.PlayersActive;
                  playerNum++) {
@@ -876,7 +1293,34 @@ void GameplayMenu::Draw() {
             }
         }
         if (GuiButton(RestartBox, "Restart")) {
-            TheGameRenderer.backgroundVideo.Stop();
+            TheGameRenderer.ResetFadeState();
+            
+            if (TheGameRenderer.backgroundVideo.IsLoaded()) {
+                TheGameRenderer.backgroundVideo.Stop();
+                TheGameRenderer.backgroundVideo.Unload();
+                
+                if (TheGameSettings.VideoBackgrounds) {
+                    std::filesystem::path videoPath = TheSongList.curSong->songInfoPath.parent_path() / "video.mp4";
+                    if (TheGameRenderer.backgroundVideo.Load(videoPath)) {
+                        if (TheSongList.curSong->videoEndTime > 0) {
+                            TheGameRenderer.backgroundVideo.SetEndTime(TheSongList.curSong->videoEndTime);
+                        }
+                        
+                        if (TheSongList.curSong->videoStartTime > 0) {
+                            if (TheSongList.curSong->videoEndTime > 0) {
+                                TheGameRenderer.backgroundVideo.PlayWithDelayAndEndTime(
+                                    TheSongList.curSong->videoStartTime, 
+                                    TheSongList.curSong->videoEndTime
+                                );
+                            } else {
+                                TheGameRenderer.backgroundVideo.PlayWithDelay(TheSongList.curSong->videoStartTime);
+                            }
+                        } else {
+                            TheGameRenderer.backgroundVideo.Play();
+                        }
+                    }
+                }
+            }
             TheSongTime.Reset();
             for (int player = 0; player < ThePlayerManager.PlayersActive; player++) {
                 TheSongList.curSong
@@ -904,25 +1348,13 @@ void GameplayMenu::Draw() {
             ThePlayerManager.BandStats->Paused = false;
         }
         if (GuiButton(QuitBox, "Back to Music Library")) {
-            TheGameRenderer.backgroundVideo.Unload();
-            TheSongList.curSong->LoadAlbumArt();
-            ThePlayerManager.BandStats->ResetBandGameplayStats();
-            TheGameRenderer.midiLoaded = false;
-            TheSongTime.Reset();
-
-            TheAudioManager.unloadStreams();
-            TheGameRenderer.highwayInAnimation = false;
-            TheGameRenderer.highwayInEndAnim = false;
-            TheGameRenderer.songPlaying = false;
-            for (int playerNum = 0; playerNum < ThePlayerManager.PlayersActive;
-                 playerNum++) {
-                TheSongList.curSong
-                    ->parts[ThePlayerManager.GetActivePlayer(playerNum).Instrument]
-                    ->charts[ThePlayerManager.GetActivePlayer(playerNum).Difficulty]
-                    .resetNotes();
-                ThePlayerManager.GetActivePlayer(playerNum).stats->Quit = true;
+            for (int playerNum = 0; playerNum < ThePlayerManager.PlayersActive; playerNum++) {
+                Player& player = ThePlayerManager.GetActivePlayer(playerNum);
+                if (player.stats) {
+                    player.stats->Quit = true;
+                }
             }
-            TheMenuManager.SwitchScreen(RESULTS);
+            CleanupAndSwitchToResults();
             SETDEFAULTSTYLE();
             return;
         }
@@ -1008,22 +1440,7 @@ void GameplayMenu::Draw() {
 
     if (!ThePlayerManager.BandStats->Multiplayer
         && ThePlayerManager.GetActivePlayer(0).stats->Health <= 0) {
-        TheGameRenderer.backgroundVideo.Unload();
-        TheSongList.curSong->LoadAlbumArt();
-        ThePlayerManager.BandStats->ResetBandGameplayStats();
-        TheGameRenderer.midiLoaded = false;
-        TheSongTime.Reset();
-
-        TheAudioManager.unloadStreams();
-        TheGameRenderer.highwayInAnimation = false;
-        TheGameRenderer.highwayInEndAnim = false;
-        TheGameRenderer.songPlaying = false;
-
-        TheSongList.curSong->parts[ThePlayerManager.GetActivePlayer(0).Instrument]
-            ->charts[ThePlayerManager.GetActivePlayer(0).Difficulty]
-            .resetNotes();
-        ThePlayerManager.GetActivePlayer(0).stats->Quit = true;
-        TheMenuManager.SwitchScreen(RESULTS);
+        CleanupAndSwitchToResults();
     }
 
     extern Encore::Settings TheGameSettings;
@@ -1041,25 +1458,29 @@ void GameplayMenu::Draw() {
             float leftInputBoxSize = (5 * u.winpct(0.02f)) / 2;
 
             Color fretColor;
-            switch (fretBox) {
-            default:
-                fretColor = BROWN;
-                break;
-            case (0):
-                fretColor = GREEN;
-                break;
-            case (1):
-                fretColor = RED;
-                break;
-            case (2):
-                fretColor = YELLOW;
-                break;
-            case (3):
-                fretColor = BLUE;
-                break;
-            case (4):
-                fretColor = ORANGE;
-                break;
+            if (TheGameSettings.ClassicNotesOnPad) {
+                switch (fretBox) {
+                default:
+                    fretColor = BROWN;
+                    break;
+                case (0):
+                    fretColor = GREEN;
+                    break;
+                case (1):
+                    fretColor = RED;
+                    break;
+                case (2):
+                    fretColor = YELLOW;
+                    break;
+                case (3):
+                    fretColor = BLUE;
+                    break;
+                case (4):
+                    fretColor = ORANGE;
+                    break;
+                }
+            } else {
+                fretColor = ThePlayerManager.GetActivePlayer(0).AccentColor;
             }
 
             DrawRectangle(
@@ -1086,16 +1507,107 @@ void GameplayMenu::Draw() {
             ThePlayerManager.GetActivePlayer(0).stats->DownStrum ? WHITE : GRAY
         );
     }
+    
+    if (TheGameSettings.ShowDebugTimers) {
+        double trackTime = TheSongTime.GetSongTime();
+        double videoTime = 0.0;
+        if (TheGameRenderer.backgroundVideo.IsLoaded()) {
+            videoTime = TheGameRenderer.backgroundVideo.GetCurrentPositionMs() / 1000.0;
+        }
+        
+        float fontSize = u.hinpct(0.025f);
+        float rightMargin = u.wpct(0.02f);
+        float topMargin = u.hpct(0.15f);
+        float lineHeight = fontSize * 1.3f;
+        
+        const char* trackTimeText = TextFormat("Track: %.3fs", trackTime);
+        const char* videoTimeText = TextFormat("Video: %.3fs", videoTime);
+        const char* diffText = TextFormat("Diff: %.3fs", trackTime - videoTime);
+        
+        Vector2 trackTimeSize = MeasureTextEx(assets.rubikBold, trackTimeText, fontSize, 0);
+        Vector2 videoTimeSize = MeasureTextEx(assets.rubikBold, videoTimeText, fontSize, 0);
+        Vector2 diffSize = MeasureTextEx(assets.rubikBold, diffText, fontSize, 0);
+        
+        float maxWidth = trackTimeSize.x;
+        if (videoTimeSize.x > maxWidth) maxWidth = videoTimeSize.x;
+        if (diffSize.x > maxWidth) maxWidth = diffSize.x;
+        
+        float boxWidth = maxWidth + u.winpct(0.02f);
+        float boxHeight = lineHeight * 3 + u.hinpct(0.02f);
+        float boxX = GetScreenWidth() - boxWidth - rightMargin;
+        float boxY = topMargin;
+        
+        DrawRectangle(boxX, boxY, boxWidth, boxHeight, Color{0, 0, 0, 180});
+        DrawRectangleLinesEx({boxX, boxY, boxWidth, boxHeight}, 2.0f, WHITE);
+        
+        float textX = boxX + u.winpct(0.01f);
+        float textY = boxY + u.hinpct(0.01f);
+        
+        DrawTextEx(assets.rubikBold, trackTimeText, {textX, textY}, fontSize, 0, WHITE);
+        textY += lineHeight;
+        DrawTextEx(assets.rubikBold, videoTimeText, {textX, textY}, fontSize, 0, WHITE);
+        textY += lineHeight;
+        
+        Color diffColor = WHITE;
+        float diff = trackTime - videoTime;
+        if (diff > 0.1f) diffColor = RED;
+        else if (diff < -0.1f) diffColor = YELLOW;
+        else diffColor = GREEN;
+        
+        DrawTextEx(assets.rubikBold, diffText, {textX, textY}, fontSize, 0, diffColor);
+    }
 }
 
 void GameplayMenu::Load() {
+    TheGameRenderer.ResetFadeState();
+    
+    for (int i = 0; i < 4; i++) {
+        streakPopEffects[i].active = false;
+        streakPopEffects[i].triggerTime = 0.0;
+        streakPopEffects[i].lastCombo = 0;
+    }
+    
+    highScoreEffect.triggered = false;
+    highScoreEffect.triggerTime = 0.0;
+    highScoreEffect.previousHighScore = 0;
+    highScoreEffect.highScoreLoaded = false;
+    
+    if (ThePlayerManager.PlayersActive == 1) {
+        Player &player = ThePlayerManager.GetActivePlayer(0);
+        std::string songID = LeaderboardManager::GenerateSongID(
+            TheSongList.curSong->title,
+            TheSongList.curSong->artist
+        );
+        ScoreData highScore = LeaderboardManager::GetHighestScoreForInstrument(
+            player.PlayerID,
+            songID,
+            static_cast<int>(player.Instrument)
+        );
+        highScoreEffect.previousHighScore = highScore.hasScore ? highScore.score : 0;
+        highScoreEffect.highScoreLoaded = true;
+    }
+    
     TheSongList.curSong->LoadAlbumArt();
-    std::filesystem::path videoPath = TheSongList.curSong->songInfoPath.parent_path() / "video.mp4";
-    if (TheGameRenderer.backgroundVideo.Load(videoPath)) {
-        if (TheSongList.curSong->videoStartTime > 0) {
-            TheGameRenderer.backgroundVideo.PlayWithDelay(TheSongList.curSong->videoStartTime);
-        } else {
-            TheGameRenderer.backgroundVideo.Play();
+    
+    if (TheGameSettings.VideoBackgrounds) {
+        std::filesystem::path videoPath = TheSongList.curSong->songInfoPath.parent_path() / "video.mp4";
+        if (TheGameRenderer.backgroundVideo.Load(videoPath)) {
+            if (TheSongList.curSong->videoEndTime > 0) {
+                TheGameRenderer.backgroundVideo.SetEndTime(TheSongList.curSong->videoEndTime);
+            }
+            
+            if (TheSongList.curSong->videoStartTime > 0) {
+                if (TheSongList.curSong->videoEndTime > 0) {
+                    TheGameRenderer.backgroundVideo.PlayWithDelayAndEndTime(
+                        TheSongList.curSong->videoStartTime, 
+                        TheSongList.curSong->videoEndTime
+                    );
+                } else {
+                    TheGameRenderer.backgroundVideo.PlayWithDelay(TheSongList.curSong->videoStartTime);
+                }
+            } else {
+                TheGameRenderer.backgroundVideo.Play();
+            }
         }
     }
     if (ThePlayerManager.PlayersActive > 1) {

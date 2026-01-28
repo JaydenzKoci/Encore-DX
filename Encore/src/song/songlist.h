@@ -33,6 +33,7 @@ enum class SortType : int {
     Source,
     Length,
     Year,
+    Score,
     EnumEnd
 };
 
@@ -52,7 +53,7 @@ inline SortType NextSortType(SortType current) {
 inline std::atomic_int CurrentChartNumber = -1;
 inline std::atomic_int ListLoadingState = -1;
 inline std::atomic_int MaxChartsToLoad = -1;
-inline std::vector<std::string> sortTypes { "Title", "Artist", "Source", "Length", "Year" };
+inline std::vector<std::string> sortTypes { "Title", "Artist", "Source", "Length", "Year", "Score" };
 
 enum SongListLoadingStates {
     FINDING_CACHE,
@@ -90,6 +91,8 @@ public:
 
     // for when you have a song selected and want to keep that position in song list
     void sortList(SortType sortType, int &selectedSong);
+    
+    void sortListByScore(int instrumentFilter, int &selectedSong, const std::string& playerUUID);
 
     void WriteCache();
 

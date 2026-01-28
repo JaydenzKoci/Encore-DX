@@ -7,6 +7,7 @@
 #include "settings-old.h"
 #include "GLFW/glfw3.h"
 #include "song/songlist.h"
+#include "gameplayRenderer.h"
 
 int GameplayInputHandler::calculatePressedMask(PlayerGameplayStats *&stats) {
     int mask = 0;
@@ -117,6 +118,7 @@ void GameplayInputHandler::CheckPlasticInputs(
         curNote.cHitNote(eventTime, player.InputCalibration);
         // TODO: fix for plastic
         stats->HitPlasticNote(curNote);
+        
         ThePlayerManager.BandStats->AddClassicNotePoint(
             curNote.perfect, stats->noODmultiplier(), curNote.chordSize
         );
@@ -137,6 +139,8 @@ void GameplayInputHandler::handleInputs(Player &player, int lane, int action) {
     PlayerManager &playerManager = ThePlayerManager;
     Encore::EncoreLog(LOG_DEBUG, TextFormat("Player: %s, Lane: %01i, Action: %01i", player.Name.c_str(), lane, action));
     if (stats->Paused)
+        return;
+    if (enctime.IsInResumeGracePeriod())
         return;
     if (lane == -2)
         return;
@@ -213,6 +217,7 @@ void GameplayInputHandler::CheckPadInputs(
     if (InHitwindow && (NotePressed || NoteLifted) && lane == curNote.lane) {
         curNote.padHitNote(eventTime, player.InputCalibration);
         stats->HitNote(curNote.perfect);
+        
         if (curNote.lift && action == GLFW_RELEASE) {
             stats->lastHitLifts[lane] =
                 curChart.notes_perlane[lane][stats->curNoteIdx[lane]];

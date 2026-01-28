@@ -13,10 +13,15 @@ enum Screens {
     SETTINGSCONTROLLER,
     SETTINGSKEYBOARD,
     SETTINGSCREDITS,
+    SETTINGSSONGPATHS,
+    DOWNLOADSONGS,
     CALIBRATION,
     CHART_LOADING_SCREEN,
     SOUND_TEST,
-    CACHE_LOADING_SCREEN
+    CACHE_LOADING_SCREEN,
+    MULTIPLAYER_MENU,
+    MULTIPLAYER_SONG_SELECT,
+    MULTIPLAYER_READY_UP
 };
 
 inline const char* ToString(Screens v)
@@ -34,6 +39,8 @@ inline const char* ToString(Screens v)
         case SETTINGSCONTROLLER: return "Controller Bindings";
         case SETTINGSKEYBOARD: return "Keyboard Bindings";
         case SETTINGSCREDITS: return "Credits";
+        case SETTINGSSONGPATHS: return "Song Paths";
+        case DOWNLOADSONGS: return "Download Songs";
         case CALIBRATION: return "Calibration";
         case CHART_LOADING_SCREEN: return "Chart Loading Screen";
         case SOUND_TEST: return "Debug Test Menu";

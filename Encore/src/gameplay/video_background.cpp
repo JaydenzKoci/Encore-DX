@@ -77,3 +77,27 @@ void VideoBackgroundManager::Unload() {
     }
     isPlaying = false;
 }
+
+void VideoBackgroundManager::Seek(double timeMs) {
+    if (currentVideo && currentVideo->IsLoaded()) {
+        currentVideo->Seek(timeMs);
+    }
+}
+
+void VideoBackgroundManager::Resume() {
+    if (currentVideo && currentVideo->IsLoaded()) {
+        currentVideo->Resume();
+        isPlaying = true;
+    }
+}
+
+bool VideoBackgroundManager::HasEnded() const {
+    return currentVideo && currentVideo->HasEnded();
+}
+
+double VideoBackgroundManager::GetCurrentPositionMs() const {
+    if (currentVideo && currentVideo->IsLoaded()) {
+        return currentVideo->GetCurrentPositionMs();
+    }
+    return 0.0;
+}

@@ -4,6 +4,7 @@
 #include "menus/menu.h"
 #include "util/discord.h"
 #include "util/enclog.h"
+#include "util/downloadOverlay.h"
 #include "gameplay/enctime.h"
 #include <cassert>
 #define assertm(exp, msg) assert((void(msg), exp))
@@ -214,6 +215,9 @@ int main(int argc, char *argv[]) {
         }
 
         TheMenuManager.DrawMenu();
+        
+        Encore::DownloadOverlay::Draw();
+        
         EndDrawing();
         TheFrameManager.WaitForFrame();
     }

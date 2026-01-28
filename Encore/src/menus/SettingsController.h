@@ -6,9 +6,13 @@
 #include "OvershellMenu.h"
 #include "settings-old.h"
 #include "keybinds.h"
+#include "settings.h"
 #include <string>
 #include <utility>
 #include <vector>
+
+extern Encore::Settings TheGameSettings;
+extern Encore::SettingsInit TheSettingsInitializer;
 
 #ifndef SETTINGSCONTROLLER_H
 #define SETTINGSCONTROLLER_H
@@ -32,7 +36,6 @@ public:
     void Save();
 
 private:
-    SettingsOld& settings = SettingsOld::getInstance();
     Keybinds keybinds;
     int selectedIndex = 0;
     int bindingOption = -1;
@@ -41,17 +44,17 @@ private:
     bool isHovering = false;
     const float boxWidthPct = 0.55f;
     std::vector<std::pair<std::string, int*>> options = {
-        {"4K Lane 1", &settings.controller4K[0]},
-        {"4K Lane 2", &settings.controller4K[1]},
-        {"4K Lane 3", &settings.controller4K[2]},
-        {"4K Lane 4", &settings.controller4K[3]},
-        {"5K Lane 1", &settings.controller5K[0]},
-        {"5K Lane 2", &settings.controller5K[1]},
-        {"5K Lane 3", &settings.controller5K[2]},
-        {"5K Lane 4", &settings.controller5K[3]},
-        {"5K Lane 5", &settings.controller5K[4]},
-        {"Overdrive", &settings.controllerOverdrive},
-        {"Pause", &settings.controllerPause}
+        {"4K Lane 1", &TheGameSettings.Controller4K[0]},
+        {"4K Lane 2", &TheGameSettings.Controller4K[1]},
+        {"4K Lane 3", &TheGameSettings.Controller4K[2]},
+        {"4K Lane 4", &TheGameSettings.Controller4K[3]},
+        {"5K Lane 1", &TheGameSettings.Controller5K[0]},
+        {"5K Lane 2", &TheGameSettings.Controller5K[1]},
+        {"5K Lane 3", &TheGameSettings.Controller5K[2]},
+        {"5K Lane 4", &TheGameSettings.Controller5K[3]},
+        {"5K Lane 5", &TheGameSettings.Controller5K[4]},
+        {"Overdrive", &TheGameSettings.ControllerOverdrive},
+        {"Pause", &TheGameSettings.ControllerPause}
     };
     struct SidebarContent {
         const char* header;

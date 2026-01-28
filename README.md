@@ -1,12 +1,29 @@
-# Encore
+# Encore DX
 
 [![Chat with us on Discord](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg)](https://discord.gg/GhkgVUAC9v)
 
-Up-and-coming 4/5 key rhythm game.
+A deluxe version of a Up-and-coming 4/5 key rhythm game.
+
+Most of the features present in DX will eventually be added to indev
 
 Encore supports controllers and keyboard. Songs formatted for other games will NOT work with Encore.
-
-## Installation
+## Deluxe Features
+### New Features
+- Offline Leaderboards
+- Video Backgrounds
+- Download Songs In Game (Only Available On Windows)
+- Better Song Select Menu
+- Inactive Instrument Timer and Track Fading
+- Reworked Scoring
+### Customizability
+- Toggles for HUD Positions and Text Overlays
+- New Keybind Menus
+- Pro Colors on Pad
+- All Audios Can Be Adjusted
+### Bug Fixes
+- Completely reworked settings code
+- No more crashes while restarting a song or exiting
+- No more Song Cache crashes. I think
 
 ### Stable releases
 

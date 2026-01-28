@@ -9,87 +9,60 @@
 #include "raygui.h"
 #include "uiUnits.h"
 #include "util/settings-text.h"
+#include <filesystem>
 
 static const std::vector<std::string> presets = {
     "Thumb", "Thumb & Index", "Index & Middle"
 };
 
 void SettingsController::resetToDefaultKeys() {
-    settings.controller4K = settings.defaultController4K;
-    settings.controller5K = settings.defaultController5K;
-    settings.controllerOverdrive = settings.defaultControllerOverdrive;
-    settings.controllerPause = settings.defaultControllerPause;
-    settings.controller4KAxisDirection = settings.defaultController4KAxisDirection;
-    settings.controller5KAxisDirection = settings.defaultController5KAxisDirection;
-    settings.controllerOverdriveAxisDirection = settings.defaultControllerOverdriveAxisDirection;
-    settings.controllerPauseAxisDirection = settings.defaultControllerPauseAxisDirection;
-    if (options.size() >= 11) {
-        *options[0].second = settings.controller4K[0];
-        *options[1].second = settings.controller4K[1];
-        *options[2].second = settings.controller4K[2];
-        *options[3].second = settings.controller4K[3];
-        *options[4].second = settings.controller5K[0];
-        *options[5].second = settings.controller5K[1];
-        *options[6].second = settings.controller5K[2];
-        *options[7].second = settings.controller5K[3];
-        *options[8].second = settings.controller5K[4];
-        *options[9].second = settings.controllerOverdrive;
-        *options[10].second = settings.controllerPause;
-    }
-    settings.syncKeybindsToGame();
+    TheGameSettings.Controller4K = {14, 12, 2, 1};
+    TheGameSettings.Controller5K = {14, 12, 2, 3, 1};
+    TheGameSettings.ControllerOverdrive = -6;
+    TheGameSettings.ControllerPause = 7;
+    TheGameSettings.Controller4KAxisDirection = {0, 0, 0, 0};
+    TheGameSettings.Controller5KAxisDirection = {0, 0, 0, 0, 0};
+    TheGameSettings.ControllerOverdriveAxisDirection = 1;
+    TheGameSettings.ControllerPauseAxisDirection = 0;
     TraceLog(LOG_INFO, "Reset controller bindings to defaults");
 }
 
-void SettingsController::applyPreset(int presetIndex) { // i fixed this in the most janky way possible
+void SettingsController::applyPreset(int presetIndex) {
     switch (presetIndex) {
-        case 0: // Thumb
-            settings.controller4K = settings.defaultController4K;
-            settings.controller5K = settings.defaultController5K;
-            settings.controllerOverdrive = settings.defaultControllerOverdrive;
-            settings.controllerPause = settings.defaultControllerPause;
-            settings.controller4KAxisDirection = settings.defaultController4KAxisDirection;
-            settings.controller5KAxisDirection = settings.defaultController5KAxisDirection;
-            settings.controllerOverdriveAxisDirection = settings.defaultControllerOverdriveAxisDirection;
-            settings.controllerPauseAxisDirection = settings.defaultControllerPauseAxisDirection;
+        case 0:
+            TheGameSettings.Controller4K = {14, 12, 2, 1};
+            TheGameSettings.Controller5K = {14, 12, 2, 3, 1};
+            TheGameSettings.ControllerOverdrive = -6;
+            TheGameSettings.ControllerPause = 7;
+            TheGameSettings.Controller4KAxisDirection = {0, 0, 0, 0};
+            TheGameSettings.Controller5KAxisDirection = {0, 0, 0, 0, 0};
+            TheGameSettings.ControllerOverdriveAxisDirection = 1;
+            TheGameSettings.ControllerPauseAxisDirection = 0;
             break;
-        case 1: // Thumb & Index
-            settings.controller4K = {-5, GLFW_GAMEPAD_BUTTON_DPAD_RIGHT, GLFW_GAMEPAD_BUTTON_X, -6};
-            settings.controller5K = {-5, GLFW_GAMEPAD_BUTTON_DPAD_RIGHT, GLFW_GAMEPAD_BUTTON_X, GLFW_GAMEPAD_BUTTON_Y, -6};
-            settings.controllerOverdrive = GLFW_GAMEPAD_BUTTON_A;
-            settings.controllerPause = GLFW_GAMEPAD_BUTTON_START;
-            settings.controller4KAxisDirection = {1, 0, 0, 1};
-            settings.controller5KAxisDirection = {1, 0, 0, 0, 1};
-            settings.controllerOverdriveAxisDirection = 0;
-            settings.controllerPauseAxisDirection = 0;
+        case 1:
+            TheGameSettings.Controller4K = {-5, 12, 2, -6};
+            TheGameSettings.Controller5K = {-5, 12, 2, 3, -6};
+            TheGameSettings.ControllerOverdrive = 0;
+            TheGameSettings.ControllerPause = 7;
+            TheGameSettings.Controller4KAxisDirection = {1, 0, 0, 1};
+            TheGameSettings.Controller5KAxisDirection = {1, 0, 0, 0, 1};
+            TheGameSettings.ControllerOverdriveAxisDirection = 0;
+            TheGameSettings.ControllerPauseAxisDirection = 0;
             break;
-        case 2: // Index & Middle
-            settings.controller4K = {-5, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, -6};
-            settings.controller5K = {-5, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, GLFW_GAMEPAD_BUTTON_X, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, -6};
-            settings.controllerOverdrive = GLFW_GAMEPAD_BUTTON_A;
-            settings.controllerPause = GLFW_GAMEPAD_BUTTON_START;
-            settings.controller4KAxisDirection = {1, 0, 0, 1};
-            settings.controller5KAxisDirection = {1, 0, 0, 0, 1};
-            settings.controllerOverdriveAxisDirection = 0;
-            settings.controllerPauseAxisDirection = 0;
+        case 2:
+            TheGameSettings.Controller4K = {-5, 4, 5, -6};
+            TheGameSettings.Controller5K = {-5, 4, 2, 5, -6};
+            TheGameSettings.ControllerOverdrive = 0;
+            TheGameSettings.ControllerPause = 7;
+            TheGameSettings.Controller4KAxisDirection = {1, 0, 0, 1};
+            TheGameSettings.Controller5KAxisDirection = {1, 0, 0, 0, 1};
+            TheGameSettings.ControllerOverdriveAxisDirection = 0;
+            TheGameSettings.ControllerPauseAxisDirection = 0;
             break;
         default:
             TraceLog(LOG_WARNING, "Invalid preset index: %d", presetIndex);
             return;
     }
-    if (options.size() >= 11) {
-        *options[0].second = settings.controller4K[0];
-        *options[1].second = settings.controller4K[1];
-        *options[2].second = settings.controller4K[2];
-        *options[3].second = settings.controller4K[3];
-        *options[4].second = settings.controller5K[0];
-        *options[5].second = settings.controller5K[1];
-        *options[6].second = settings.controller5K[2];
-        *options[7].second = settings.controller5K[3];
-        *options[8].second = settings.controller5K[4];
-        *options[9].second = settings.controllerOverdrive;
-        *options[10].second = settings.controllerPause;
-    }
-    settings.syncKeybindsToGame();
     TraceLog(LOG_INFO, "Applied preset: %s", presets[presetIndex].c_str());
 }
 
@@ -233,17 +206,17 @@ void SettingsController::Draw() {
         int axisDirection = 0;
         if (label.find("4K Lane") != std::string::npos) {
             int laneIndex = std::stoi(label.substr(label.find_last_of(" ") + 1)) - 1;
-            axisDirection = settings.controller4KAxisDirection[laneIndex];
+            axisDirection = TheGameSettings.Controller4KAxisDirection[laneIndex];
         } else if (label.find("5K Lane") != std::string::npos) {
             int laneIndex = std::stoi(label.substr(label.find_last_of(" ") + 1)) - 1;
-            axisDirection = settings.controller5KAxisDirection[laneIndex];
+            axisDirection = TheGameSettings.Controller5KAxisDirection[laneIndex];
         } else if (label == "Overdrive") {
-            axisDirection = settings.controllerOverdriveAxisDirection;
+            axisDirection = TheGameSettings.ControllerOverdriveAxisDirection;
         } else if (label == "Pause") {
-            axisDirection = settings.controllerPauseAxisDirection;
+            axisDirection = TheGameSettings.ControllerPauseAxisDirection;
         }
         std::string buttonText = (*options[i].second == -2) ? "Unbound" :
-            keybinds.getControllerStr(GLFW_JOYSTICK_1, *options[i].second, settings.controllerType, axisDirection);
+            keybinds.getControllerStr(GLFW_JOYSTICK_1, *options[i].second, TheGameSettings.ControllerType, axisDirection);
         TraceLog(LOG_INFO, "Rendering controller bind %s: %s (code=%d)", label.c_str(), buttonText.c_str(), *options[i].second);
         if (static_cast<int>(i) == bindingOption) buttonText = "Press button...";
         if (CheckCollisionPointRec(mousePos, buttonRect)) {
@@ -252,7 +225,6 @@ void SettingsController::Draw() {
             DrawRectangleLinesEx(optionBoxRect, highlightBorderWidth, glowColor);
             if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
                 auto [bindType, bindIndex] = getBindTypeAndIndex(i);
-                settings.rebindKey(bindType, bindIndex);
                 if (i < options.size()) *options[i].second = -2;
                 Save();
                 TraceLog(LOG_INFO, "Unbound %s via right-click", label.c_str());
@@ -347,22 +319,21 @@ void SettingsController::ControllerInputCallback(int joypadID, GLFWgamepadstate 
                 if (state.buttons[i] && !prevState.buttons[i]) {
                     *options[bindingOption].second = i;
                     if (bindType == "controller4K" && bindIndex < 4) {
-                        settings.controller4K[bindIndex] = i;
-                        settings.controller4KAxisDirection[bindIndex] = 0;
+                        TheGameSettings.Controller4K[bindIndex] = i;
+                        TheGameSettings.Controller4KAxisDirection[bindIndex] = 0;
                     } else if (bindType == "controller5K" && bindIndex < 5) {
-                        settings.controller5K[bindIndex] = i;
-                        settings.controller5KAxisDirection[bindIndex] = 0;
+                        TheGameSettings.Controller5K[bindIndex] = i;
+                        TheGameSettings.Controller5KAxisDirection[bindIndex] = 0;
                     } else if (bindType == "controllerOverdrive") {
-                        settings.controllerOverdrive = i;
-                        settings.controllerOverdriveAxisDirection = 0;
+                        TheGameSettings.ControllerOverdrive = i;
+                        TheGameSettings.ControllerOverdriveAxisDirection = 0;
                     } else if (bindType == "controllerPause") {
-                        settings.controllerPause = i;
-                        settings.controllerPauseAxisDirection = 0;
+                        TheGameSettings.ControllerPause = i;
+                        TheGameSettings.ControllerPauseAxisDirection = 0;
                     }
-                    settings.syncKeybindsToGame();
                     TraceLog(LOG_INFO, "Bound %s to button %d (%s)",
                              options[bindingOption].first.c_str(), i,
-                             keybinds.getControllerStr(joypadID, i, settings.controllerType, 0).c_str());
+                             keybinds.getControllerStr(joypadID, i, TheGameSettings.ControllerType, 0).c_str());
                     bindingOption = -1;
                     Save();
                     prevState = state;
@@ -377,19 +348,18 @@ void SettingsController::ControllerInputCallback(int joypadID, GLFWgamepadstate 
                     *options[bindingOption].second = axisCode;
                     int direction = (value > 0) ? 1 : -1;
                     if (bindType == "controller4K" && bindIndex < 4) {
-                        settings.controller4K[bindIndex] = axisCode;
-                        settings.controller4KAxisDirection[bindIndex] = direction;
+                        TheGameSettings.Controller4K[bindIndex] = axisCode;
+                        TheGameSettings.Controller4KAxisDirection[bindIndex] = direction;
                     } else if (bindType == "controller5K" && bindIndex < 5) {
-                        settings.controller5K[bindIndex] = axisCode;
-                        settings.controller5KAxisDirection[bindIndex] = direction;
+                        TheGameSettings.Controller5K[bindIndex] = axisCode;
+                        TheGameSettings.Controller5KAxisDirection[bindIndex] = direction;
                     } else if (bindType == "controllerOverdrive") {
-                        settings.controllerOverdrive = axisCode;
-                        settings.controllerOverdriveAxisDirection = direction;
+                        TheGameSettings.ControllerOverdrive = axisCode;
+                        TheGameSettings.ControllerOverdriveAxisDirection = direction;
                     } else if (bindType == "controllerPause") {
-                        settings.controllerPause = axisCode;
-                        settings.controllerPauseAxisDirection = direction;
+                        TheGameSettings.ControllerPause = axisCode;
+                        TheGameSettings.ControllerPauseAxisDirection = direction;
                     }
-                    settings.syncKeybindsToGame();
                     TraceLog(LOG_INFO, "Bound %s to axis %d direction %s",
                              options[bindingOption].first.c_str(), i,
                              (value > 0 ? "+" : "-"));
@@ -411,30 +381,30 @@ void SettingsController::ControllerInputCallback(int joypadID, GLFWgamepadstate 
 }
 
 void SettingsController::Load() {
-    TraceLog(LOG_INFO, "SettingsController: Loaded controller binds from settings-old.json");
-    TraceLog(LOG_INFO, "Controller Type: %d", settings.controllerType);
+    TraceLog(LOG_INFO, "SettingsController: Loaded controller binds from settings.json");
+    TraceLog(LOG_INFO, "Controller Type: %d", TheGameSettings.ControllerType);
     TraceLog(LOG_INFO, "4K Controller: [%d, %d, %d, %d]",
-             settings.controller4K[0], settings.controller4K[1],
-             settings.controller4K[2], settings.controller4K[3]);
+             TheGameSettings.Controller4K[0], TheGameSettings.Controller4K[1],
+             TheGameSettings.Controller4K[2], TheGameSettings.Controller4K[3]);
     TraceLog(LOG_INFO, "5K Controller: [%d, %d, %d, %d, %d]",
-             settings.controller5K[0], settings.controller5K[1],
-             settings.controller5K[2], settings.controller5K[3],
-             settings.controller5K[4]);
+             TheGameSettings.Controller5K[0], TheGameSettings.Controller5K[1],
+             TheGameSettings.Controller5K[2], TheGameSettings.Controller5K[3],
+             TheGameSettings.Controller5K[4]);
     TraceLog(LOG_INFO, "Overdrive: %d, Pause: %d",
-             settings.controllerOverdrive, settings.controllerPause);
+             TheGameSettings.ControllerOverdrive, TheGameSettings.ControllerPause);
 
     options.clear();
-    options.emplace_back("4K Lane 1", &settings.controller4K[0]);
-    options.emplace_back("4K Lane 2", &settings.controller4K[1]);
-    options.emplace_back("4K Lane 3", &settings.controller4K[2]);
-    options.emplace_back("4K Lane 4", &settings.controller4K[3]);
-    options.emplace_back("5K Lane 1", &settings.controller5K[0]);
-    options.emplace_back("5K Lane 2", &settings.controller5K[1]);
-    options.emplace_back("5K Lane 3", &settings.controller5K[2]);
-    options.emplace_back("5K Lane 4", &settings.controller5K[3]);
-    options.emplace_back("5K Lane 5", &settings.controller5K[4]);
-    options.emplace_back("Overdrive", &settings.controllerOverdrive);
-    options.emplace_back("Pause", &settings.controllerPause);
+    options.emplace_back("4K Lane 1", &TheGameSettings.Controller4K[0]);
+    options.emplace_back("4K Lane 2", &TheGameSettings.Controller4K[1]);
+    options.emplace_back("4K Lane 3", &TheGameSettings.Controller4K[2]);
+    options.emplace_back("4K Lane 4", &TheGameSettings.Controller4K[3]);
+    options.emplace_back("5K Lane 1", &TheGameSettings.Controller5K[0]);
+    options.emplace_back("5K Lane 2", &TheGameSettings.Controller5K[1]);
+    options.emplace_back("5K Lane 3", &TheGameSettings.Controller5K[2]);
+    options.emplace_back("5K Lane 4", &TheGameSettings.Controller5K[3]);
+    options.emplace_back("5K Lane 5", &TheGameSettings.Controller5K[4]);
+    options.emplace_back("Overdrive", &TheGameSettings.ControllerOverdrive);
+    options.emplace_back("Pause", &TheGameSettings.ControllerPause);
 
     sidebarContents = {
         {"Controller Bindings", "Configure your controller bindings"},
@@ -453,7 +423,5 @@ void SettingsController::Load() {
 }
 
 void SettingsController::Save() {
-    settings.saveOldSettings(settings.getDirectory() / "settings-old.json");
-    settings.syncKeybindsToGame();
-    TraceLog(LOG_INFO, "SettingsController: Saved controller binds to settings-old.json");
+    TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
 }

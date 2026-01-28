@@ -9,6 +9,7 @@
 #include "util/settings-text.h"
 #include "OvershellMenu.h"
 #include "raygui.h"
+#include <filesystem>
 
 void SettingsKeyboard::Draw() {
     Units& u = Units::getInstance();
@@ -100,8 +101,8 @@ void SettingsKeyboard::Draw() {
             isHovering = true;
             DrawRectangleLinesEx(optionBoxRect, highlightBorderWidth, glowColor);
             if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-                auto [bindType, bindIndex] = getBindTypeAndIndex(i);
-                settings.rebindKey(bindType, bindIndex);
+                *options[i].second = -2; // Unbind
+                Save();
                 TraceLog(LOG_INFO, "Unbound %s via right-click", label.c_str());
             }
         }
@@ -145,8 +146,6 @@ void SettingsKeyboard::KeyboardInputCallback(int key, int scancode, int action, 
     if (bindingOption >= 0) {
         if (key != GLFW_KEY_ESCAPE) { // Allow any key except ESC
             *options[bindingOption].second = key;
-            auto [bindType, bindIndex] = getBindTypeAndIndex(bindingOption);
-            settings.rebindKey(bindType, bindIndex);
             Save();
             TraceLog(LOG_INFO, "Bound %s to key %d (%s)", options[bindingOption].first.c_str(), key, keybinds.getKeyStr(key).c_str());
         }
@@ -176,11 +175,9 @@ void SettingsKeyboard::ControllerInputCallback(int joypadID, GLFWgamepadstate st
 }
 
 void SettingsKeyboard::Load() {
-    TraceLog(LOG_INFO, "SettingsKeyboard: Loaded keybinds from settings-old.json");
+    TraceLog(LOG_INFO, "SettingsKeyboard: Loaded keybinds from settings.json");
 }
 
 void SettingsKeyboard::Save() {
-    settings.saveOldSettings(settings.getDirectory() / "settings-old.json");
-    settings.syncKeybindsToGame();
-    TraceLog(LOG_INFO, "SettingsKeyboard: Saved keybinds to settings-old.json");
+    TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
 }

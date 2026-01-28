@@ -11,6 +11,17 @@
 #include <algorithm>
 #include <iso646.h>
 
+enum class InstrumentType {
+    Guitar,
+    Keytar
+};
+
+struct InstrumentTextEvent {
+    double time = 0.0;
+    int tick = 0;
+    InstrumentType type = InstrumentType::Guitar;
+};
+
 constexpr uint8_t PlasticFrets[6] {
     // open			0		     0| technically not a "fretted note" so i put it on
     // the empty space
@@ -126,6 +137,8 @@ public:
     ODEvents overdrive;
     FillEvents fills;
     SectionEvents sections;
+    
+    std::vector<InstrumentTextEvent> instrumentTextEvents;
 
     std::vector<Note> notesPre;
 
@@ -170,6 +183,41 @@ public:
                 }
             }
         }
+    }
+    
+    void getInstrumentTextEvents(smf::MidiFile &midiFile, int trkidx) {
+        smf::MidiEventList events = midiFile[trkidx];
+        for (int i = 0; i < events.getSize(); i++) {
+            if (events[i].isMeta() && (int)events[i][1] == 1) {
+                double time = midiFile.getTimeInSeconds(trkidx, i);
+                int tick = midiFile.getAbsoluteTickTime(time);
+                std::string eventText;
+                for (int k = 3; k < events[i].getSize(); k++) {
+                    eventText += events[i][k];
+                }
+                
+                if (eventText == "[guitar]") {
+                    InstrumentTextEvent newEvent;
+                    newEvent.time = time;
+                    newEvent.tick = tick;
+                    newEvent.type = InstrumentType::Guitar;
+                    instrumentTextEvents.push_back(newEvent);
+                    Encore::EncoreLog(LOG_DEBUG, TextFormat("Found [guitar] event at %5.4f", time));
+                } else if (eventText == "[keytar]") {
+                    InstrumentTextEvent newEvent;
+                    newEvent.time = time;
+                    newEvent.tick = tick;
+                    newEvent.type = InstrumentType::Keytar;
+                    instrumentTextEvents.push_back(newEvent);
+                    Encore::EncoreLog(LOG_DEBUG, TextFormat("Found [keytar] event at %5.4f", time));
+                }
+            }
+        }
+        
+        std::sort(instrumentTextEvents.begin(), instrumentTextEvents.end(),
+            [](const InstrumentTextEvent& a, const InstrumentTextEvent& b) {
+                return a.time < b.time;
+            });
     }
     bool valid = false;
 
@@ -292,5 +340,35 @@ public:
         overdrive.ResetEvents();
         solos.ResetEvents();
         fills.ResetEvents();
+    }
+    
+    InstrumentType getCurrentInstrumentType(double songTime) const {
+        if (instrumentTextEvents.empty()) {
+            return InstrumentType::Guitar;
+        }
+        
+        InstrumentType currentType = InstrumentType::Guitar;
+        for (const auto& event : instrumentTextEvents) {
+            if (event.time <= songTime) {
+                currentType = event.type;
+            } else {
+                break;
+            }
+        }
+        return currentType;
+    }
+    
+    bool hasInstrumentTextEvents() const {
+        return !instrumentTextEvents.empty();
+    }
+    
+    InstrumentType getInitialInstrumentType() const {
+        if (instrumentTextEvents.empty()) {
+            return InstrumentType::Guitar;
+        }
+        if (instrumentTextEvents[0].time < 0.1) {
+            return instrumentTextEvents[0].type;
+        }
+        return InstrumentType::Guitar;
     }
 };

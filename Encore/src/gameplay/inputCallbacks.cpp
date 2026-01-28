@@ -45,6 +45,14 @@ void keyCallback(GLFWwindow *wind, int key, int scancode, int action, int mods) 
         TheMenuManager.ActiveMenu->KeyboardInputCallback(key, scancode, action, mods);
         break;
     }
+    case SETTINGSSONGPATHS: {
+        TheMenuManager.ActiveMenu->KeyboardInputCallback(key, scancode, action, mods);
+        break;
+    }
+    case DOWNLOADSONGS: {
+        TheMenuManager.ActiveMenu->KeyboardInputCallback(key, scancode, action, mods);
+        break;
+    }
     case RESULTS: {
         TheMenuManager.ActiveMenu->KeyboardInputCallback(key, scancode, action, mods);
         break;
@@ -138,6 +146,14 @@ void gamepadStateCallback(int joypadID, GLFWgamepadstate state) {
             break;
         }
         case SETTINGSCREDITS: {
+            TheMenuManager.ActiveMenu->ControllerInputCallback(joypadID, state);
+            break;
+        }
+        case SETTINGSSONGPATHS: {
+            TheMenuManager.ActiveMenu->ControllerInputCallback(joypadID, state);
+            break;
+        }
+        case DOWNLOADSONGS: {
             TheMenuManager.ActiveMenu->ControllerInputCallback(joypadID, state);
             break;
         }

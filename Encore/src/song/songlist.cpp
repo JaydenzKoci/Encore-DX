@@ -1,5 +1,6 @@
 #include "songlist.h"
 #include "util/enclog.h"
+#include "leaderboard/leaderboard.h"
 
 #include <set>
 #include <algorithm>
@@ -145,6 +146,54 @@ void SongList::sortList(SortType sortType, int &selectedSong) {
     listMenuEntries = GenerateSongEntriesWithHeaders(songs, sortType);
 }
 
+struct SongScorePair {
+    size_t songIndex;
+    int score;
+};
+
+void SongList::sortListByScore(int instrumentFilter, int &selectedSong, const std::string& playerUUID) {
+    Song curSong;
+    bool hasCurrentSong = selectedSong >= 0 && selectedSong < songs.size();
+    if (hasCurrentSong) {
+        curSong = songs[selectedSong];
+    }
+    selectedSong = 0;
+    
+    std::vector<SongScorePair> songScores;
+    songScores.reserve(songs.size());
+    
+    for (size_t i = 0; i < songs.size(); i++) {
+        std::string songID = LeaderboardManager::GenerateSongID(songs[i].title, songs[i].artist);
+        ScoreData scoreData = LeaderboardManager::GetHighestScoreForInstrument(playerUUID, songID, instrumentFilter);
+        songScores.push_back({i, scoreData.hasScore ? scoreData.score : -1});
+    }
+    
+    std::sort(songScores.begin(), songScores.end(), [](const SongScorePair& a, const SongScorePair& b) {
+        if (a.score == -1 && b.score == -1) return false;
+        if (a.score == -1) return false;
+        if (b.score == -1) return true;
+        return a.score > b.score;
+    });
+    
+    std::vector<Song> sortedSongs;
+    sortedSongs.reserve(songs.size());
+    for (const auto& pair : songScores) {
+        sortedSongs.push_back(std::move(songs[pair.songIndex]));
+    }
+    songs = std::move(sortedSongs);
+    
+    if (hasCurrentSong) {
+        for (size_t i = 0; i < songs.size(); i++) {
+            if (songs[i].artist == curSong.artist && songs[i].title == curSong.title) {
+                selectedSong = i;
+                break;
+            }
+        }
+    }
+    
+    listMenuEntries = GenerateSongEntriesWithHeaders(songs, SortType::Score);
+}
+
 void SongList::WriteCache() {
     std::filesystem::remove("songCache.encr");
 
@@ -176,7 +225,10 @@ void SongList::WriteCache() {
         Encore::EncoreLog(LOG_INFO, TextFormat("CACHE: Song length:    %01i", song.length));
     }
 
+    SongCache.flush();
     SongCache.close();
+    
+    Encore::EncoreLog(LOG_INFO, "CACHE: Song cache write completed");
 }
 
 // Using the more feature-complete ScanSongs function from songlist.cpp
@@ -291,8 +343,7 @@ void SongList::ScanSongs(const std::vector<std::filesystem::path> &songsFolder) 
         }
     }
 
-    Encore::EncoreLog(LOG_INFO, "CACHE: Rewriting song cache");
-    WriteCache();
+    Encore::EncoreLog(LOG_INFO, "CACHE: Song scan completed");
 }
 
 std::string GetLengthHeader(int length) {
@@ -338,6 +389,10 @@ std::vector<ListMenuEntry> SongList::GenerateSongEntriesWithHeaders(
             header = song.releaseYear.empty() ? "Unknown Year" : song.releaseYear;
             break;
         }
+        case SortType::Score: {
+            header = "By Score";
+            break;
+        }
         default:
             header = "#";
             break;
@@ -358,9 +413,11 @@ std::vector<ListMenuEntry> SongList::GenerateSongEntriesWithHeaders(
 void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) {
     encore::bin_ifstream_native SongCacheIn("songCache.encr", std::ios::binary);
     if (!SongCacheIn) {
-        Encore::EncoreLog(LOG_WARNING, "CACHE: Failed to load song cache!");
+        Encore::EncoreLog(LOG_WARNING, "CACHE: Failed to load song cache, creating new cache!");
         SongCacheIn.close();
         ScanSongs(songsFolder);
+        WriteCache();
+        sortList(SortType::Title);
         return;
     }
 
@@ -368,9 +425,11 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
     uint32_t header;
     SongCacheIn >> header;
     if (header != SONG_CACHE_HEADER) {
-        Encore::EncoreLog(LOG_WARNING, "CACHE: Invalid song cache format, rescanning");
+        Encore::EncoreLog(LOG_WARNING, "CACHE: Invalid song cache format, rescanning and rebuilding cache");
         SongCacheIn.close();
         ScanSongs(songsFolder);
+        WriteCache();
+        sortList(SortType::Title);
         return;
     }
 
@@ -380,13 +439,15 @@ void SongList::LoadCache(const std::vector<std::filesystem::path> &songsFolder) 
         Encore::EncoreLog(
             LOG_WARNING,
             TextFormat(
-                "CACHE: Cache version %01i, but current version is %01i",
+                "CACHE: Cache version %01i, but current version is %01i, rebuilding cache",
                 version,
                 SONG_CACHE_VERSION
             )
         );
         SongCacheIn.close();
         ScanSongs(songsFolder);
+        WriteCache();
+        sortList(SortType::Title);
         return;
     }
 

@@ -10,8 +10,10 @@
 #include "gameplay/enctime.h"
 #include "OvershellMenu.h"
 #include "util/settings-text.h"
+#include <thread>
+#include <chrono>
 
-
+extern Encore::SettingsInit TheSettingsInitializer;
 
 bool ShowGameplaySettings = true;
 
@@ -67,18 +69,10 @@ void SettingsGameplay::Draw() {
         const char* body;
     };
     SidebarContent sidebarContents[] = {
-        // sidebar text
-        // fullscreen
         {
             "Fullscreen",
             "TBD"
         },
-        // scan Songs
-        {
-            "Scan Songs",
-            "TBD"
-        },
-
         {
             "Hit Window",
             "TBD"
@@ -97,6 +91,30 @@ void SettingsGameplay::Draw() {
         },
         {
             "HUD Position",
+            "TBD"
+        },
+        {
+            "Track Fading",
+            "TBD"
+        },
+        {
+            "Video Backgrounds",
+            "TBD"
+        },
+        {
+            "Classic Notes on Pad",
+            "TBD"
+        },
+        {
+            "Debug Timers",
+            "TBD"
+        },
+        {
+            "Scan Songs",
+            "TBD"
+        },
+        {
+            "Song Paths",
             "TBD"
         }
     };
@@ -210,40 +228,6 @@ void SettingsGameplay::Draw() {
     GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, defaultColor);
 
     settingOffset++;
-    float scanSongsTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
-    Rectangle scanSongsBoxRect = {boxLeft - borderWidth, scanSongsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth};
-    DrawRectangle(boxLeft - borderWidth, scanSongsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth, boxBorder);
-    DrawRectangle(boxLeft, scanSongsTop, boxWidth, scanButtonHeight, boxBackground);
-    Vector2 scanSongsTextSize = MeasureTextEx(assets.rubikBold, "Scan Songs", EntryFontSize, 0);
-    DrawTextEx(assets.rubikBold, "Scan Songs", {boxLeft + u.winpct(0.01f), scanSongsTop + (scanButtonHeight - scanSongsTextSize.y) / 2}, EntryFontSize, 0, WHITE);
-    Rectangle scanButtonRect = {OptionLeft + OptionWidth - scanButtonWidth, scanSongsTop, scanButtonWidth, scanButtonHeight};
-    if (CheckCollisionPointRec(mousePos, scanButtonRect)) {
-        selectedIndex = 1;
-        isHovering = true;
-        DrawRectangleLinesEx(scanSongsBoxRect, highlightBorderWidth, glowColor);
-    }
-    if (GuiButton(scanButtonRect, "Scan Songs")) {
-        if (TheGameSettings.SongPaths.empty()) {
-            TraceLog(LOG_ERROR, "SongPaths is empty. Cannot scan songs.");
-        } else {
-            try {
-                TraceLog(LOG_INFO, "Starting song scan with %d paths", TheGameSettings.SongPaths.size());
-                for (const auto& path : TheGameSettings.SongPaths) {
-                    TraceLog(LOG_INFO, "Scanning path: %s", path.c_str());
-                }
-                TheSongList.ScanSongs(TheGameSettings.SongPaths);
-                TraceLog(LOG_INFO, "Song scan completed successfully");
-            } catch (const std::exception& e) {
-                TraceLog(LOG_ERROR, "Error during song scan: %s", e.what());
-            } catch (...) {
-                TraceLog(LOG_ERROR, "Unknown error during song scan");
-            }
-        }
-    }
-
-
-
-    settingOffset++;
     float hideHitWindowTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
     Rectangle hideHitWindowBoxRect = {boxLeft - borderWidth, hideHitWindowTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
     DrawRectangle(boxLeft - borderWidth, hideHitWindowTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
@@ -253,7 +237,7 @@ void SettingsGameplay::Draw() {
     Rectangle hitWindowOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, hideHitWindowTop, toggleButtonWidth, EntryHeight};
     Rectangle hitWindowOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, hideHitWindowTop, toggleButtonWidth, EntryHeight};
     if (CheckCollisionPointRec(mousePos, hitWindowOffButtonRect) || CheckCollisionPointRec(mousePos, hitWindowOnButtonRect)) {
-        selectedIndex = 2;
+        selectedIndex = 1;
         isHovering = true;
         DrawRectangleLinesEx(hideHitWindowBoxRect, highlightBorderWidth, glowColor);
     }
@@ -261,14 +245,14 @@ void SettingsGameplay::Draw() {
     if (GuiButton(hitWindowOffButtonRect, "Off")) {
         if (!TheGameSettings.HideHitWindow) {
             TheGameSettings.HideHitWindow = true;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.HideHitWindow ? ColorToInt(activeColor) : defaultColor);
     if (GuiButton(hitWindowOnButtonRect, "On")) {
         if (TheGameSettings.HideHitWindow) {
             TheGameSettings.HideHitWindow = false;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     if (TheGameSettings.HideHitWindow) {
@@ -288,7 +272,7 @@ void SettingsGameplay::Draw() {
     Rectangle healthBarOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, showHealthBarTop, toggleButtonWidth, EntryHeight};
     Rectangle healthBarOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, showHealthBarTop, toggleButtonWidth, EntryHeight};
     if (CheckCollisionPointRec(mousePos, healthBarOffButtonRect) || CheckCollisionPointRec(mousePos, healthBarOnButtonRect)) {
-        selectedIndex = 3;
+        selectedIndex = 2;
         isHovering = true;
         DrawRectangleLinesEx(showHealthBarBoxRect, highlightBorderWidth, glowColor);
     }
@@ -296,14 +280,14 @@ void SettingsGameplay::Draw() {
     if (GuiButton(healthBarOffButtonRect, "Off")) {
         if (TheGameSettings.ShowHealthBar) {
             TheGameSettings.ShowHealthBar = false;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, TheGameSettings.ShowHealthBar ? ColorToInt(activeColor) : defaultColor);
     if (GuiButton(healthBarOnButtonRect, "On")) {
         if (!TheGameSettings.ShowHealthBar) {
             TheGameSettings.ShowHealthBar = true;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     if (!TheGameSettings.ShowHealthBar) {
@@ -323,7 +307,7 @@ void SettingsGameplay::Draw() {
     Rectangle fpsOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, hideFPSTop, toggleButtonWidth, EntryHeight};
     Rectangle fpsOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, hideFPSTop, toggleButtonWidth, EntryHeight};
     if (CheckCollisionPointRec(mousePos, fpsOffButtonRect) || CheckCollisionPointRec(mousePos, fpsOnButtonRect)) {
-        selectedIndex = 4;
+        selectedIndex = 3;
         isHovering = true;
         DrawRectangleLinesEx(hideFPSBoxRect, highlightBorderWidth, glowColor);
     }
@@ -331,14 +315,14 @@ void SettingsGameplay::Draw() {
     if (GuiButton(fpsOffButtonRect, "Off")) {
         if (!TheGameSettings.HideFPSCounter) {
             TheGameSettings.HideFPSCounter = true;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.HideFPSCounter ? ColorToInt(activeColor) : defaultColor);
     if (GuiButton(fpsOnButtonRect, "On")) {
         if (TheGameSettings.HideFPSCounter) {
             TheGameSettings.HideFPSCounter = false;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     if (TheGameSettings.HideFPSCounter) {
@@ -358,7 +342,7 @@ void SettingsGameplay::Draw() {
     Rectangle versionOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, hideVersionTop, toggleButtonWidth, EntryHeight};
     Rectangle versionOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, hideVersionTop, toggleButtonWidth, EntryHeight};
     if (CheckCollisionPointRec(mousePos, versionOffButtonRect) || CheckCollisionPointRec(mousePos, versionOnButtonRect)) {
-        selectedIndex = 5;
+        selectedIndex = 4;
         isHovering = true;
         DrawRectangleLinesEx(hideVersionBoxRect, highlightBorderWidth, glowColor);
     }
@@ -366,14 +350,14 @@ void SettingsGameplay::Draw() {
     if (GuiButton(versionOffButtonRect, "Off")) {
         if (!TheGameSettings.HideVersionInfo) {
             TheGameSettings.HideVersionInfo = true;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.HideVersionInfo ? ColorToInt(activeColor) : defaultColor);
     if (GuiButton(versionOnButtonRect, "On")) {
         if (TheGameSettings.HideVersionInfo) {
             TheGameSettings.HideVersionInfo = false;
-            TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
         }
     }
     if (TheGameSettings.HideVersionInfo) {
@@ -399,14 +383,196 @@ void SettingsGameplay::Draw() {
     const char* currentHUDPosition = hudPositionNames[TheGameSettings.HUDPosition % 4];
     
     if (CheckCollisionPointRec(mousePos, hudCycleButtonRect)) {
-        selectedIndex = 6;
+        selectedIndex = 5;
         isHovering = true;
         DrawRectangleLinesEx(hudPositionBoxRect, highlightBorderWidth, glowColor);
     }
     
     if (GuiButton(hudCycleButtonRect, currentHUDPosition)) {
         TheGameSettings.HUDPosition = (TheGameSettings.HUDPosition + 1) % 4;
-        TheGameSettings.SaveToFile((settingsMain.getDirectory() / "settings.json").string());
+        TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+    }
+
+    settingOffset++;
+    float trackFadingTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle trackFadingBoxRect = {boxLeft - borderWidth, trackFadingTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, trackFadingTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, trackFadingTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 trackFadingTextSize = MeasureTextEx(assets.rubikBold, "Track Fading", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Track Fading", {boxLeft + u.winpct(0.01f), trackFadingTop + (EntryHeight - trackFadingTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle trackFadingOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, trackFadingTop, toggleButtonWidth, EntryHeight};
+    Rectangle trackFadingOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, trackFadingTop, toggleButtonWidth, EntryHeight};
+    if (CheckCollisionPointRec(mousePos, trackFadingOffButtonRect) || CheckCollisionPointRec(mousePos, trackFadingOnButtonRect)) {
+        selectedIndex = 6;
+        isHovering = true;
+        DrawRectangleLinesEx(trackFadingBoxRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.TrackFading ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(trackFadingOffButtonRect, "Off")) {
+        if (TheGameSettings.TrackFading) {
+            TheGameSettings.TrackFading = false;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, TheGameSettings.TrackFading ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(trackFadingOnButtonRect, "On")) {
+        if (!TheGameSettings.TrackFading) {
+            TheGameSettings.TrackFading = true;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    if (!TheGameSettings.TrackFading) {
+        DrawRectangleLinesEx(trackFadingOffButtonRect, highlightBorderWidth, glowColor);
+    } else {
+        DrawRectangleLinesEx(trackFadingOnButtonRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, defaultColor);
+
+    settingOffset++;
+    float videoBackgroundsTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle videoBackgroundsBoxRect = {boxLeft - borderWidth, videoBackgroundsTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, videoBackgroundsTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, videoBackgroundsTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 videoBackgroundsTextSize = MeasureTextEx(assets.rubikBold, "Video Backgrounds", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Video Backgrounds", {boxLeft + u.winpct(0.01f), videoBackgroundsTop + (EntryHeight - videoBackgroundsTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle videoBackgroundsOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, videoBackgroundsTop, toggleButtonWidth, EntryHeight};
+    Rectangle videoBackgroundsOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, videoBackgroundsTop, toggleButtonWidth, EntryHeight};
+    if (CheckCollisionPointRec(mousePos, videoBackgroundsOffButtonRect) || CheckCollisionPointRec(mousePos, videoBackgroundsOnButtonRect)) {
+        selectedIndex = 7;
+        isHovering = true;
+        DrawRectangleLinesEx(videoBackgroundsBoxRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.VideoBackgrounds ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(videoBackgroundsOffButtonRect, "Off")) {
+        if (TheGameSettings.VideoBackgrounds) {
+            TheGameSettings.VideoBackgrounds = false;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, TheGameSettings.VideoBackgrounds ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(videoBackgroundsOnButtonRect, "On")) {
+        if (!TheGameSettings.VideoBackgrounds) {
+            TheGameSettings.VideoBackgrounds = true;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    if (!TheGameSettings.VideoBackgrounds) {
+        DrawRectangleLinesEx(videoBackgroundsOffButtonRect, highlightBorderWidth, glowColor);
+    } else {
+        DrawRectangleLinesEx(videoBackgroundsOnButtonRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, defaultColor);
+
+    settingOffset++;
+    float classicNotesTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle classicNotesBoxRect = {boxLeft - borderWidth, classicNotesTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, classicNotesTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, classicNotesTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 classicNotesTextSize = MeasureTextEx(assets.rubikBold, "Classic Notes on Pad", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Classic Notes on Pad", {boxLeft + u.winpct(0.01f), classicNotesTop + (EntryHeight - classicNotesTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle classicNotesOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, classicNotesTop, toggleButtonWidth, EntryHeight};
+    Rectangle classicNotesOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, classicNotesTop, toggleButtonWidth, EntryHeight};
+    if (CheckCollisionPointRec(mousePos, classicNotesOffButtonRect) || CheckCollisionPointRec(mousePos, classicNotesOnButtonRect)) {
+        selectedIndex = 8;
+        isHovering = true;
+        DrawRectangleLinesEx(classicNotesBoxRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.ClassicNotesOnPad ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(classicNotesOffButtonRect, "Off")) {
+        if (TheGameSettings.ClassicNotesOnPad) {
+            TheGameSettings.ClassicNotesOnPad = false;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, TheGameSettings.ClassicNotesOnPad ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(classicNotesOnButtonRect, "On")) {
+        if (!TheGameSettings.ClassicNotesOnPad) {
+            TheGameSettings.ClassicNotesOnPad = true;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    if (!TheGameSettings.ClassicNotesOnPad) {
+        DrawRectangleLinesEx(classicNotesOffButtonRect, highlightBorderWidth, glowColor);
+    } else {
+        DrawRectangleLinesEx(classicNotesOnButtonRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, defaultColor);
+
+    settingOffset++;
+    float debugTimersTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle debugTimersBoxRect = {boxLeft - borderWidth, debugTimersTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, debugTimersTop - borderWidth, boxWidth + 2 * borderWidth, EntryHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, debugTimersTop, boxWidth, EntryHeight, boxBackground);
+    Vector2 debugTimersTextSize = MeasureTextEx(assets.rubikBold, "Debug Timers", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Debug Timers", {boxLeft + u.winpct(0.01f), debugTimersTop + (EntryHeight - debugTimersTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle debugTimersOffButtonRect = {OptionLeft + OptionWidth - 2 * toggleButtonWidth - toggleOffset, debugTimersTop, toggleButtonWidth, EntryHeight};
+    Rectangle debugTimersOnButtonRect = {OptionLeft + OptionWidth - toggleButtonWidth - toggleOffset, debugTimersTop, toggleButtonWidth, EntryHeight};
+    if (CheckCollisionPointRec(mousePos, debugTimersOffButtonRect) || CheckCollisionPointRec(mousePos, debugTimersOnButtonRect)) {
+        selectedIndex = 11;
+        isHovering = true;
+        DrawRectangleLinesEx(debugTimersBoxRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, !TheGameSettings.ShowDebugTimers ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(debugTimersOffButtonRect, "Off")) {
+        if (TheGameSettings.ShowDebugTimers) {
+            TheGameSettings.ShowDebugTimers = false;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, TheGameSettings.ShowDebugTimers ? ColorToInt(activeColor) : defaultColor);
+    if (GuiButton(debugTimersOnButtonRect, "On")) {
+        if (!TheGameSettings.ShowDebugTimers) {
+            TheGameSettings.ShowDebugTimers = true;
+            TheGameSettings.SaveIfChanged(TheSettingsInitializer.GetSettingsFilePath());
+        }
+    }
+    if (!TheGameSettings.ShowDebugTimers) {
+        DrawRectangleLinesEx(debugTimersOffButtonRect, highlightBorderWidth, glowColor);
+    } else {
+        DrawRectangleLinesEx(debugTimersOnButtonRect, highlightBorderWidth, glowColor);
+    }
+    GuiSetStyle(BUTTON, BASE_COLOR_PRESSED, defaultColor);
+
+    settingOffset++;
+    float scanSongsTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle scanSongsBoxRect = {boxLeft - borderWidth, scanSongsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, scanSongsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, scanSongsTop, boxWidth, scanButtonHeight, boxBackground);
+    Vector2 scanSongsTextSize = MeasureTextEx(assets.rubikBold, "Scan Songs", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Scan Songs", {boxLeft + u.winpct(0.01f), scanSongsTop + (scanButtonHeight - scanSongsTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle scanButtonRect = {OptionLeft + OptionWidth - scanButtonWidth, scanSongsTop, scanButtonWidth, scanButtonHeight};
+    if (CheckCollisionPointRec(mousePos, scanButtonRect)) {
+        selectedIndex = 10;
+        isHovering = true;
+        DrawRectangleLinesEx(scanSongsBoxRect, highlightBorderWidth, glowColor);
+    }
+    if (GuiButton(scanButtonRect, "Scan Songs")) {
+        auto enabledPaths = TheGameSettings.GetEnabledSongPaths();
+        if (enabledPaths.empty()) {
+            TraceLog(LOG_ERROR, "No enabled song paths. Cannot scan songs.");
+        } else {
+            try {
+                TheSongList.ScanSongs(enabledPaths);
+            } catch (...) {
+            }
+        }
+    }
+
+    settingOffset++;
+    float songPathsTop = EntryTop + (EntryHeight + verticalGap) * settingOffset;
+    Rectangle songPathsBoxRect = {boxLeft - borderWidth, songPathsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth};
+    DrawRectangle(boxLeft - borderWidth, songPathsTop - borderWidth, boxWidth + 2 * borderWidth, scanButtonHeight + 2 * borderWidth, boxBorder);
+    DrawRectangle(boxLeft, songPathsTop, boxWidth, scanButtonHeight, boxBackground);
+    Vector2 songPathsTextSize = MeasureTextEx(assets.rubikBold, "Song Paths", EntryFontSize, 0);
+    DrawTextEx(assets.rubikBold, "Song Paths", {boxLeft + u.winpct(0.01f), songPathsTop + (scanButtonHeight - songPathsTextSize.y) / 2}, EntryFontSize, 0, WHITE);
+    Rectangle songPathsButtonRect = {OptionLeft + OptionWidth - scanButtonWidth, songPathsTop, scanButtonWidth, scanButtonHeight};
+    if (CheckCollisionPointRec(mousePos, songPathsButtonRect)) {
+        selectedIndex = 11;
+        isHovering = true;
+        DrawRectangleLinesEx(songPathsBoxRect, highlightBorderWidth, glowColor);
+    }
+    if (GuiButton(songPathsButtonRect, "Manage Paths")) {
+        TheMenuManager.SwitchScreen(SETTINGSSONGPATHS);
     }
 
     if (!isHovering) {

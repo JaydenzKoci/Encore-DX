@@ -31,7 +31,7 @@ public:
     void operator=(const Assets &) = delete;
 
     int loadedAssets;
-    int totalAssets = 32;
+    int totalAssets = 33;
     Model smasherInner;
     Model smasherOuter;
     Texture2D smasherInnerTex;
@@ -56,6 +56,7 @@ public:
     Texture2D star;
     Texture2D goldStar;
     Texture2D emptyStar;
+    Texture2D crown;
 
     Texture2D Scorebox;
     Texture2D Timerbox;
@@ -164,6 +165,7 @@ public:
 
     std::vector<Texture2D> YargRings;
     Texture2D BaseRingTexture;
+    Texture2D CountInTexture;
     std::vector<Texture2D> InstIcons;
 
     Image icon;

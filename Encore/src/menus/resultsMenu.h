@@ -9,13 +9,13 @@
 #include "menu.h"
 
 class resultsMenu : public OvershellMenu {
-    // ok assets go here
-    // i forgot which assets i need.
     Texture2D GoldStar;
     Texture2D Star;
     Texture2D EmptyStar;
     Shader sdfShader;
     std::vector<std::string> diffList;
+    bool isNewHighScore = false;
+    int previousHighScore = 0;
     void drawPlayerResults(Player &player, Song song, int playerslot);
     void renderPlayerStars(
         PlayerGameplayStats *&stats, float xPos, float yPos, float scale, bool left

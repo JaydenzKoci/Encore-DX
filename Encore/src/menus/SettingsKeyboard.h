@@ -10,6 +10,9 @@
 #include "assets.h"
 #include "settings.h"
 
+extern Encore::Settings TheGameSettings;
+extern Encore::SettingsInit TheSettingsInitializer;
+
 #ifndef SETTINGSKEYBOARD_H
 #define SETTINGSKEYBOARD_H
 
@@ -33,25 +36,24 @@ public:
     void Save();
 
 private:
-    SettingsOld& settings = SettingsOld::getInstance();
     Keybinds keybinds;
     int selectedIndex = 0;
     int bindingOption = -1;
     bool isHovering = false;
     const float boxWidthPct = 0.55f;
     std::vector<std::pair<std::string, int*>> options = {
-        {"4K Lane 1", &settings.keybinds4K[0]},
-        {"4K Lane 2", &settings.keybinds4K[1]},
-        {"4K Lane 3", &settings.keybinds4K[2]},
-        {"4K Lane 4", &settings.keybinds4K[3]},
-        {"5K Lane 1", &settings.keybinds5K[0]},
-        {"5K Lane 2", &settings.keybinds5K[1]},
-        {"5K Lane 3", &settings.keybinds5K[2]},
-        {"5K Lane 4", &settings.keybinds5K[3]},
-        {"5K Lane 5", &settings.keybinds5K[4]},
-        {"Overdrive", &settings.keybindOverdrive},
-        {"Overdrive Alt", &settings.keybindOverdriveAlt},
-        {"Pause", &settings.keybindPause}
+        {"4K Lane 1", &TheGameSettings.Keybinds4K[0]},
+        {"4K Lane 2", &TheGameSettings.Keybinds4K[1]},
+        {"4K Lane 3", &TheGameSettings.Keybinds4K[2]},
+        {"4K Lane 4", &TheGameSettings.Keybinds4K[3]},
+        {"5K Lane 1", &TheGameSettings.Keybinds5K[0]},
+        {"5K Lane 2", &TheGameSettings.Keybinds5K[1]},
+        {"5K Lane 3", &TheGameSettings.Keybinds5K[2]},
+        {"5K Lane 4", &TheGameSettings.Keybinds5K[3]},
+        {"5K Lane 5", &TheGameSettings.Keybinds5K[4]},
+        {"Overdrive", &TheGameSettings.KeybindOverdrive},
+        {"Overdrive Alt", &TheGameSettings.KeybindOverdriveAlt},
+        {"Pause", &TheGameSettings.KeybindPause}
     };
     struct SidebarContent {
         const char* header;

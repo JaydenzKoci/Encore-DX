@@ -190,6 +190,12 @@ namespace encore {
             noexcept(noexcept(mStream->close())) requires closable_stream<Stream> {
             mStream->close();
         }
+        
+        void flush() requires std::derived_from<Stream, std::ostream> {
+            if (mStream) {
+                static_cast<std::ostream*>(mStream.get())->flush();
+            }
+        }
     };
 
     /// Reads binary values from a stream using the specified endianness.

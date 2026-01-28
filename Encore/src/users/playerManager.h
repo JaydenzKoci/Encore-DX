@@ -33,10 +33,14 @@ public:
     void AddActivePlayer(int playerNum, int slot) {
         ActivePlayers.at(slot) = playerNum;
         GetActivePlayer(slot).joypadID = slot;
+        GetActivePlayer(slot).ActiveSlot = slot;
         PlayersActive += 1;
     }
 
     void RemoveActivePlayer(int slot) {
+        if (ActivePlayers.at(slot) != -1) {
+            PlayerList.at(ActivePlayers.at(slot)).ActiveSlot = 0;
+        }
         ActivePlayers.at(slot) = -1;
         PlayersActive -= 1;
     }

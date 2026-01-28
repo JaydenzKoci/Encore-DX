@@ -41,9 +41,6 @@ private:
 
         if (std::filesystem::exists(oldSettingsFile)) {
             loadOldSettings(oldSettingsFile);
-        } else {
-            std::cerr << "Warning: " << oldSettingsFile << " does not exist. Creating with defaults." << std::endl;
-            saveOldSettings(oldSettingsFile);
         }
     }
 
@@ -207,7 +204,7 @@ public:
                 std::cerr << "Error: Invalid bindType or index for " << bindType << "[" << index << "]" << std::endl;
                 return;
             }
-            saveOldSettings(directory / "settings-old.json");
+            TheGameSettings.SaveIfChanged((directory / "settings.json").string());
             std::cout << "Info: Keybind " << bindType << (index >= 0 ? "[" + std::to_string(index) + "]" : "")
                       << " unbound via right-click." << std::endl;
             return;
@@ -243,10 +240,10 @@ public:
                     keybindPause = key;
                     prevKeybindPause = keybindPause;
                 } else {
-                    std::cerr << "Error: Invalid bindType or index for " << bindType << "[" << index << "]" << std::endl;
+                    std::cerr << "Error: Invalid bindType or index for " << bindType << "[" + index << "]" << std::endl;
                     return;
                 }
-                saveOldSettings(directory / "settings-old.json");
+                TheGameSettings.SaveIfChanged((directory / "settings.json").string());
                 std::cout << "Info: Keybind " << bindType << (index >= 0 ? "[" + std::to_string(index) + "]" : "")
                           << " set to " << key << std::endl;
                 return;
@@ -446,7 +443,6 @@ public:
             if (inputOffsetError) inputOffsetMS = 0;
         }
 
-        saveOldSettings(settingsFile);
         syncKeybindsToGame();
         std::filesystem::remove(keybindsFile);
     }
@@ -784,7 +780,6 @@ public:
             prevHighwayLengthMult = highwayLengthMult;
             prevMissHighwayColor = missHighwayColor;
 
-            saveOldSettings(oldFile);
         }
     }
 

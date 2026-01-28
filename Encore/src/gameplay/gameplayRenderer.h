@@ -6,6 +6,7 @@
 #include "video.h"
 
 #include <utility>
+#include <vector>
 #include <raylib.h>
 #include <filesystem>
 #include "users/player.h"
@@ -33,7 +34,7 @@ class gameplayRenderer {
     );
     void RenderPDrumsHighway(Player &player, Song song, double curSongTime);
     void DrawHighwayMesh(
-        float LengthMultiplier, bool Overdrive, float ActiveTime, float SongTime, bool EMH
+        float LengthMultiplier, bool Overdrive, float ActiveTime, float SongTime, bool EMH, Player &player
     );
     void StartRenderTexture();
     void DrawSmashers(Player &player);
@@ -73,7 +74,8 @@ class gameplayRenderer {
         float notePosX,
         float length,
         float relTime,
-        float relEnd
+        float relEnd,
+        Player &player
     );
     void nDrawCodaLanes(
         float length,
@@ -81,7 +83,8 @@ class gameplayRenderer {
         double cLen,
         double curTime,
         float NoteSpeed,
-        int Difficulty
+        int Difficulty,
+        Player &player
     );
     void nDrawFiveLaneUnderlay(float length, bool pad, Player &player);
 
@@ -136,6 +139,24 @@ public:
 
     bool streamsLoaded = false;
     bool midiLoaded = false;
+    
+    struct PlayerFadeState {
+        float rendererAlpha = 1.0f;
+        bool isFading = false;
+        bool isFadedOut = false;
+        double lastNoteCheckTime = 0.0;
+        double fadeStartTime = 0.0;
+        double fadeInStartTime = 0.0;
+        double noNotesDetectedTime = 0.0;
+        double sustainEndTime = 0.0;
+        float fadeDuration = 0.5f;
+        float fadeOutDelay = 1.5f;
+        double nextNoteTime = 0.0;
+        bool showCountdown = false;
+        double countdownStartTime = 0.0;
+    };
+    
+    std::vector<PlayerFadeState> playerFadeStates;
 
     float Back4p = -12.0f;
     float Height4p = 10.0f;
@@ -220,6 +241,16 @@ public:
     void NoteMultiplierEffect(double curSongTime, Player &player);
     void DrawRenderTexture();
     double multiplierEffectTime = 1.0;
+    bool HasNotesInTimeRange(double startTime, double endTime, Player &player);
+    bool HasActiveSustainNotes(Player &player);
+    bool HasHeldInputs(Player &player);
+    void ClearHeldInputs(Player &player);
+    void UpdateRendererFade(double currentTime, Player &player);
+    void ResetFadeState();
+    void InitializePlayerFadeStates(int numPlayers);
+    float GetRendererAlpha(int playerIndex) const;
+    PlayerFadeState& GetPlayerFadeState(int playerIndex);
+    double GetNextNoteTime(double currentTime, Player &player);
 };
 
 extern gameplayRenderer TheGameRenderer;

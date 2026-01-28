@@ -4,7 +4,10 @@
 
 #include "cacheLoadingScreen.h"
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
+#include <mutex>
 #include <thread>
 
 #include "gameMenu.h"
@@ -14,6 +17,7 @@
 #include "raygui.h"
 #include "MenuManager.h"
 #include "settings.h"
+#include "util/enclog.h"
 
 std::vector<std::string> CacheSplash = {
     "Want a break from the cache?",
@@ -39,13 +43,19 @@ void cacheLoadingScreen::Load() {
 
 // todo(3drosalia): make another class for drawing these things without having to uh.
 // implement it in every menu class
-bool finished = false;
-bool started = false;
+std::atomic<bool> finished(false);
+std::atomic<bool> started(false);
 
 void LoadCache() {
     SongList &list = TheSongList;
-    list.LoadCache(TheGameSettings.SongPaths);
-    finished = true;
+    auto enabledPaths = TheGameSettings.GetEnabledSongPaths();
+    if (enabledPaths.empty()) {
+        enabledPaths = TheGameSettings.SongPaths;
+    }
+    list.LoadCache(enabledPaths);
+    std::atomic_thread_fence(std::memory_order_release);
+    Encore::EncoreLog(LOG_INFO, "CACHE: Cache loading thread completed successfully");
+    finished.store(true, std::memory_order_release);
 }
 
 void cacheLoadingScreen::Draw() {
@@ -110,13 +120,15 @@ void cacheLoadingScreen::Draw() {
         sdfShader,
         LEFT
     );
-    if (!started) {
-        started = true;
+    if (!started.load(std::memory_order_acquire)) {
+        started.store(true, std::memory_order_release);
         std::thread CacheLoader(LoadCache);
         CacheLoader.detach();
     }
-    if (finished)
+    if (finished.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         TheMenuManager.SwitchScreen(MAIN_MENU);
+    }
 }
 
 cacheLoadingScreen::~cacheLoadingScreen() {}

@@ -40,3 +40,13 @@ void Encore::Discord::DiscordUpdatePresenceSong(
     presence.details = details.c_str();
     Discord_UpdatePresence(&presence);
 }
+
+void Encore::Discord::DiscordUpdatePresenceSong(
+    const std::string &title, const std::string &artist, const std::string &details, int instrument
+) {
+    presence.smallImageKey = AssetNames[instrument].c_str();
+    presence.largeImageKey = "encore";
+    presence.state = title.c_str();
+    presence.details = details.c_str();
+    Discord_UpdatePresence(&presence);
+}

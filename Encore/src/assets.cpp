@@ -93,6 +93,7 @@ void Assets::LoadAssets() {
     );
     emptyStar =
         Assets::LoadTextureFilter(directory / "Assets/ui/empty-star.png", loadedAssets);
+    crown = Assets::LoadTextureFilter(directory / "Assets/ui/crown.png", loadedAssets);
 
     Highway = LoadShader(
         (highwayDir / "fLighting.vsh").string().c_str(),
@@ -119,8 +120,8 @@ void Assets::LoadAssets() {
         Assets::LoadTextureFilter(directory / "Assets/ui/mult_fill_od.png", loadedAssets);
     multNumberTex =
         Assets::LoadTextureFilter(directory / "Assets/ui/mult_number.png", loadedAssets);
-    odMultShader = LoadShader("Assets/gameplay/highway/fLighting.vsh", "Assets/ui/odmult.fs");
-    multNumberShader = LoadShader(0, "Assets/ui/multnumber.fs");
+    odMultShader = LoadShader((directory / "Assets/gameplay/highway/fLighting.vsh").string().c_str(), (directory / "Assets/ui/odmult.fs").string().c_str());
+    multNumberShader = LoadShader(0, (directory / "Assets/ui/multnumber.fs").string().c_str());
 
     MultInnerDot = Assets::LoadModel_(
         (highwayDir / "multiplier/MultCenterDot.obj"), loadedAssets
@@ -134,6 +135,10 @@ void Assets::LoadAssets() {
     MultInnerFrame = Assets::LoadModel_(
         (highwayDir / "multiplier/MultInnerFrame.obj"), loadedAssets
     );
+    // Set MultInnerFrame material to white so tint colors work properly
+    for (int i = 0; i < MultInnerFrame.materialCount; i++) {
+        MultInnerFrame.materials[i].maps[MATERIAL_MAP_ALBEDO].color = WHITE;
+    }
 
     MultFillBase = Assets::LoadTextureFilter(
         (highwayDir / "multiplier/Untitled.png"), loadedAssets
@@ -149,7 +154,31 @@ void Assets::LoadAssets() {
         (highwayDir / "multiplier/od-shine3.png"), loadedAssets
     );
 
-    FullComboIndicator = LoadShader(0, "Assets/ui/fc_ind.fsh");
+    const char* fcIndShaderCode = 
+        "#version 330\n"
+        "in vec2 fragTexCoord;\n"
+        "in vec4 fragColor;\n"
+        "uniform sampler2D baseTex;\n"
+        "uniform sampler2D tex1;\n"
+        "uniform sampler2D tex2;\n"
+        "uniform vec4 basicColor;\n"
+        "uniform float time;\n"
+        "uniform vec4 color;\n"
+        "uniform int isFC;\n"
+        "out vec4 finalColor;\n"
+        "void main() {\n"
+        "    vec2 basePush = vec2(fragTexCoord.x+(time/8.0), fragTexCoord.y);\n"
+        "    vec2 middlePush = vec2(fragTexCoord.x-(time/5.0), fragTexCoord.y);\n"
+        "    vec2 topPush = vec2(fragTexCoord.x+(time/6.0), fragTexCoord.y);\n"
+        "    vec4 baseColor = color;\n"
+        "    if (isFC >= 1) {\n"
+        "        finalColor = clamp((((baseColor * texture(tex2, middlePush)) * 2.0) + ((baseColor * texture(tex1, topPush)) * 2.0) + ((baseColor * texture(baseTex, basePush)) / 4.0)) * 5.0, baseColor * 1.5, vec4(1.0, 1.0, 1.0, 1.0));\n"
+        "        finalColor.a = 1.0;\n"
+        "    } else {\n"
+        "        finalColor = basicColor;\n"
+        "    }\n"
+        "}\n";
+    FullComboIndicator = LoadShaderFromMemory(0, fcIndShaderCode);
     BottomTextureLoc = GetShaderLocation(FullComboIndicator, "baseTex");
     MiddleTextureLoc = GetShaderLocation(FullComboIndicator, "tex1");
     TopTextureLoc = GetShaderLocation(FullComboIndicator, "tex2");
@@ -157,7 +186,9 @@ void Assets::LoadAssets() {
     FCColorLoc = GetShaderLocation(FullComboIndicator, "color");
     FCIndLoc = GetShaderLocation(FullComboIndicator, "isFC");
     BasicColorLoc = GetShaderLocation(FullComboIndicator, "basicColor");
-    MultInnerFrame.materials[0].shader = FullComboIndicator;
+    for (int i = 0; i < MultInnerFrame.materialCount; i++) {
+        MultInnerFrame.materials[i].shader = FullComboIndicator;
+    }
 
     MultiplierFill = LoadShader(0, (highwayDir/"multiplier/MultiplierFill.fsh").string().c_str());
 
@@ -273,6 +304,9 @@ void Assets::LoadAssets() {
 
     BaseRingTexture =
         LoadTextureFilter((directory / "Assets/ui/hugh ring/rings.png"), loadedAssets);
+
+    CountInTexture =
+        LoadTextureFilter((directory / "Assets/ui/CountIn.png"), loadedAssets);
 
     InstIcons.push_back(
         LoadTextureFilter((directory / "Assets/ui/hugh ring/drums-inv.png"), loadedAssets)

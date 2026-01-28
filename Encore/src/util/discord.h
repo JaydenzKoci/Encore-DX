@@ -15,10 +15,16 @@ namespace Encore {
     public:
         Discord();
         ~Discord();
+        
         void DiscordUpdatePresence(
             const std::string &title, const std::string &details
         );
+        
         void DiscordUpdatePresenceSong(const std::string &title, const std::string &details, int instrument);
+        
+        void DiscordUpdatePresenceSong(const std::string &title, const std::string &artist, const std::string &details, int instrument);
+        
+
     };
 };
 

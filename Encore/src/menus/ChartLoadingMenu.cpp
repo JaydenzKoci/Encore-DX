@@ -57,6 +57,10 @@ void LoadCharts() {
                     noteIdx++;
                 }
             }
+            
+            if (inst == PartGuitar || inst == PlasticGuitar) {
+                chart.getInstrumentTextEvents(midiFile, track);
+            }
         }
 
         //}

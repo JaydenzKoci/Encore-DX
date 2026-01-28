@@ -177,6 +177,7 @@ public:
     int length = 0;
     int songListPos = 0;
     int BeatTrackID = 0;
+    std::string songID = "";
 
     bool AlbumArtLoaded = false;
     double music_start = 0.0;
@@ -209,6 +210,7 @@ public:
     bool ini = false;
     float previewStartTime = 0.0f;
     int videoStartTime = 0;
+    int videoEndTime = 0;
 
     std::vector<BPM> bpms {};
     std::vector<TimeSig> timesigs {};
@@ -221,6 +223,7 @@ public:
 
         if (!ifs.is_open()) {
             std::cerr << "Failed to open JSON file." << std::endl;
+            return;
         }
         if (!stemsPath.empty())
             stemsPath.clear();
@@ -341,6 +344,7 @@ public:
 
         if (!ifs.is_open()) {
             std::cerr << "Failed to open JSON file." << std::endl;
+            return;
         }
         if (!stemsPath.empty())
             stemsPath.clear();
@@ -355,6 +359,9 @@ public:
         document.Parse(jsonString.c_str());
         songInfoPath = jsonPath;
         songDir = jsonPath.parent_path();
+        if (!document.IsObject()) {
+            return;
+        }
         for (auto &item : document.GetObject()) {
             if (item.name == "title" && item.value.IsString())
                 title = item.value.GetString();
@@ -433,6 +440,9 @@ public:
             if (document.HasMember("video_start_time") && document["video_start_time"].IsInt()) {
                 videoStartTime = document["video_start_time"].GetInt();
             }
+            if (document.HasMember("video_end_time") && document["video_end_time"].IsInt()) {
+                videoEndTime = document["video_end_time"].GetInt();
+            }
         }
         if (document.HasMember("stems") && document["stems"].IsObject()) {
             for (auto &path : document["stems"].GetObject()) {
@@ -477,6 +487,7 @@ public:
                 LOG_ERROR,
                 TextFormat("Failed to open song JSON file. %s", jsonPath.c_str())
             );
+            return;
         }
         if (!stemsPath.empty())
             stemsPath.clear();

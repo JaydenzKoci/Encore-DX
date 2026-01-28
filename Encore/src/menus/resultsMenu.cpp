@@ -11,6 +11,7 @@
 #include "users/playerManager.h"
 #include "OvershellHelper.h"
 #include "MenuManager.h"
+#include "leaderboard/leaderboard.h"
 
 void resultsMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state) {}
 void resultsMenu::KeyboardInputCallback(int key, int scancode, int action, int mods) {}
@@ -55,6 +56,9 @@ void resultsMenu::Load() {
     std::cout << "Band Perfect Score: " << ThePlayerManager.BandStats->PerfectScore << std::endl;
     std::cout << "Band Note Score: " << ThePlayerManager.BandStats->NoteScore << std::endl;
 
+    isNewHighScore = false;
+    previousHighScore = 0;
+
     for (int playerNum = 0; playerNum < ThePlayerManager.PlayersActive; playerNum++) {
         Player &player = ThePlayerManager.GetActivePlayer(playerNum);
         PlayerGameplayStats *&stats = ThePlayerManager.GetActivePlayer(playerNum).stats;
@@ -64,6 +68,38 @@ void resultsMenu::Load() {
         std::cout << player.Name << " Overdrive Score: " << stats->OverdriveScore << std::endl;
         std::cout << player.Name << " Perfect Score: " << stats->PerfectScore << std::endl;
         std::cout << player.Name << " Note Score: " << stats->NoteScore << std::endl;
+        
+        if (TheSongList.curSong && !player.Bot && !stats->Quit) {
+            std::string songID = LeaderboardManager::GenerateSongID(
+                TheSongList.curSong->title, 
+                TheSongList.curSong->artist
+            );
+            
+            if (ThePlayerManager.PlayersActive == 1) {
+                ScoreData oldHighScore = LeaderboardManager::GetHighestScoreForInstrument(
+                    player.PlayerID,
+                    songID,
+                    static_cast<int>(player.Instrument)
+                );
+                previousHighScore = oldHighScore.hasScore ? oldHighScore.score : 0;
+                if (oldHighScore.hasScore && stats->Score > previousHighScore) {
+                    isNewHighScore = true;
+                }
+            }
+            
+            LeaderboardManager::SaveScore(
+                player.PlayerID,
+                songID,
+                stats->Score,
+                stats->Stars(),
+                player.Difficulty,
+                player.Instrument,
+                stats->PerfectHit,
+                stats->NotesHit - stats->PerfectHit,
+                stats->NotesMissed,
+                stats->GoldStars()
+            );
+        }
     }
 }
 
@@ -114,44 +150,29 @@ void resultsMenu::Draw() {
         0,
         WHITE
     );
-    Color accentColor =
-        ColorBrightness(ColorContrast(RED, -0.125f), -0.25f);
-    std::string indevWarnText = "Scoring is disabled in indev builds";
-    float warningTextSize = u.hinpct(0.038f);
-    float textWidth = MeasureTextEx(assets.josefinSansItalic, indevWarnText.c_str(), warningTextSize, 0).x;
-    Vector2 TopLeft = { u.LeftSide, u.hpct(0.158f) };
-    DrawRectangle(0, TopLeft.y, u.LeftSide, warningTextSize, accentColor);
 
-    DrawRectangleGradientH(
-        TopLeft.x,
-        TopLeft.y,
-        textWidth + u.winpct(0.1f),
-        warningTextSize,
-        accentColor,
-        Color { 0, 0, 0, 0 }
-    );
-    GameMenu::mhDrawText(
-        assets.josefinSansItalic,
-        indevWarnText.c_str(),
-        { TopLeft.x, TopLeft.y + u.hinpct(0.008f) },
-        u.hinpct(0.025f),
-        WHITE,
-        sdfShader,
-        0
-    );
-
-    renderStars(ThePlayerManager.BandStats, u.wpct(0.5f), u.hpct(0.1f), u.hinpct(0.05f), false);
-    float ScoreFontSize = u.hinpct(0.075f);
-    std::string ScoreText = GameMenu::scoreCommaFormatter(ThePlayerManager.BandStats->Score).c_str();
-    GameMenu::mhDrawText(
-        assets.redHatDisplayItalic,
-        GameMenu::scoreCommaFormatter(ThePlayerManager.BandStats->Score).c_str(),
-        { u.wpct(0.5), u.hpct(0.02125f) },
-        ScoreFontSize,
-        GetColor(0x00adffFF),
-        sdfShader,
-        CENTER
-    );
+    if (ThePlayerManager.PlayersActive > 1) {
+        renderStars(ThePlayerManager.BandStats, u.wpct(0.5f), u.hpct(0.1f), u.hinpct(0.05f), false);
+        float ScoreFontSize = u.hinpct(0.075f);
+        GameMenu::mhDrawText(
+            assets.redHatDisplayItalic,
+            GameMenu::scoreCommaFormatter(ThePlayerManager.BandStats->Score).c_str(),
+            { u.wpct(0.5), u.hpct(0.02125f) },
+            ScoreFontSize,
+            GetColor(0x00adffFF),
+            sdfShader,
+            CENTER
+        );
+    } else if (isNewHighScore) {
+        const char* text = "New High Score";
+        float fontSize = u.hinpct(0.05f);
+        Vector2 textSize = MeasureTextEx(assets.rubikBold, text, fontSize, 0);
+        
+        float textX = (GetScreenWidth() - textSize.x) / 2;
+        float textY = GetScreenHeight() * 0.10f;
+        
+        DrawTextEx(assets.rubikBold, text, {textX, textY}, fontSize, 0, WHITE);
+    }
 
     if (GuiButton({ 0, 0, 60, 60 }, "<")) {
         delete ThePlayerManager.BandStats;

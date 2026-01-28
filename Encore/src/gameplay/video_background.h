@@ -15,6 +15,10 @@ public:
     bool IsLoaded() const;
     bool IsPlaying() const;
     void Unload();
+    void Seek(double timeMs);
+    void Resume();
+    bool HasEnded() const;
+    double GetCurrentPositionMs() const;
 
 private:
     VideoBackgroundManager() = default;

@@ -14,7 +14,10 @@
 #include "gameplay/gameplayRenderer.h"
 #include "song/audio.h"
 #include "song/songlist.h"
+#include "song/scoring.h"
 #include "assets.h"
+#include "leaderboard/leaderboard.h"
+#include "users/playerManager.h"
 #include <filesystem>
 #include <string>
 #include <set>
@@ -32,6 +35,12 @@ SongSelectMenu::~SongSelectMenu() {
 }
 
 void SongSelectMenu::Load() {
+    if (TheSongList.songs.empty()) {
+        TraceLog(LOG_ERROR, "Cannot load SongSelectMenu: No songs loaded!");
+        TheMenuManager.SwitchScreen(MAIN_MENU);
+        return;
+    }
+
     if (!IsAudioDeviceReady()) {
         InitAudioDevice();
         TraceLog(LOG_INFO, "Initialized audio device");
@@ -61,11 +70,15 @@ void SongSelectMenu::Load() {
     if (TheSongList.curSong) {
         TheSongList.SongSelectOffset = TheSongList.curSong->songListPos - 5;
         if (TheSongList.SongSelectOffset < 1) TheSongList.SongSelectOffset = 1;
-        if (TheSongList.SongSelectOffset > TheSongList.listMenuEntries.size() - 10)
+        if (!TheSongList.listMenuEntries.empty() && TheSongList.SongSelectOffset > TheSongList.listMenuEntries.size() - 10)
             TheSongList.SongSelectOffset = TheSongList.listMenuEntries.size() - 10;
         animatingSongID = TheSongList.curSong->songListPos - 1;
         animationStartTime = GetTime();
-        ComputeSongTextMetrics(*TheSongList.curSong);
+        try {
+            ComputeSongTextMetrics(*TheSongList.curSong);
+        } catch (const std::exception& e) {
+            TraceLog(LOG_ERROR, "Failed to compute song text metrics: %s", e.what());
+        }
     } else {
         Encore::EncoreLog(LOG_WARNING, "No current song selected for offset adjustment");
         TheSongList.SongSelectOffset = 1;
@@ -73,13 +86,22 @@ void SongSelectMenu::Load() {
 
     // TheGameRenderer.streamsLoaded = false;
     // TheGameRenderer.midiLoaded = false;
-    for (Song& song : TheSongList.songs) {
-        if (!song.ini) {
-            song.LoadInfo(song.songInfoPath);
-        } else {
-            song.LoadInfoINI(song.songInfoPath);
+    if (!TheSongList.songs.empty()) {
+        for (Song& song : TheSongList.songs) {
+            try {
+                if (!song.ini) {
+                    song.LoadInfo(song.songInfoPath);
+                } else {
+                    song.LoadInfoINI(song.songInfoPath);
+                }
+                if (song.songID.empty()) {
+                    song.songID = LeaderboardManager::GenerateSongID(song.title, song.artist);
+                }
+                ComputeSongTextMetrics(song);
+            } catch (const std::exception& e) {
+                TraceLog(LOG_ERROR, "Failed to load song info: %s", e.what());
+            }
         }
-        ComputeSongTextMetrics(song);
     }
 }
 
@@ -93,21 +115,92 @@ void SongSelectMenu::Unload() {
 }
 
 void SongSelectMenu::KeyboardInputCallback(int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS && key == GLFW_KEY_UP) {
-        if (TheSongList.SongSelectOffset <= TheSongList.listMenuEntries.size() && TheSongList.SongSelectOffset >= 1
-            && TheSongList.listMenuEntries.size() >= 10) {
-            TheSongList.SongSelectOffset--;
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        if (key == GLFW_KEY_UP) {
+            if (TheSongList.curSong && TheSongList.curSong->songListPos > 0) {
+                int currentPos = TheSongList.curSong->songListPos - 1;
+                int newPos = currentPos - 1;
+                
+                while (newPos >= 0 && (TheSongList.listMenuEntries[newPos].isHeader || TheSongList.listMenuEntries[newPos].hiddenEntry)) {
+                    newPos--;
+                }
+                
+                if (newPos >= 0) {
+                    prevAnimatingSongID = currentPos;
+                    int songID = TheSongList.listMenuEntries[newPos].songListID;
+                    TheSongList.curSong = &TheSongList.songs[songID];
+                    animatingSongID = newPos;
+                    animationStartTime = GetTime();
+                    ComputeSongTextMetrics(*TheSongList.curSong);
+                    
+                    if (!TheAudioManager.loadedStreams.empty()) {
+                        for (auto& stream : TheAudioManager.loadedStreams) {
+                            TheAudioManager.StopPlayback(stream.handle);
+                        }
+                        TheAudioManager.loadedStreams.clear();
+                        currentPreviewVolume = 0.0f;
+                        previewState = PreviewState::FadeIn;
+                    }
+                    
+                    if (!TheSongList.curSong->AlbumArtLoaded) {
+                        try {
+                            TheSongList.curSong->LoadAlbumArt();
+                            TheSongList.curSong->AlbumArtLoaded = true;
+                            SetTextureWrap(TheSongList.curSong->albumArtBlur, TEXTURE_WRAP_REPEAT);
+                            SetTextureFilter(TheSongList.curSong->albumArtBlur, TEXTURE_FILTER_ANISOTROPIC_16X);
+                        } catch (const std::exception& e) {
+                            TraceLog(LOG_ERROR, "Failed to load album art: %s", e.what());
+                        }
+                    }
+                    
+                    pendingSongID = songID;
+                    selectionTime = GetTime();
+                }
             }
-
-        // prevent going past top
+        } else if (key == GLFW_KEY_DOWN) {
+            if (TheSongList.curSong) {
+                int currentPos = TheSongList.curSong->songListPos - 1;
+                int newPos = currentPos + 1;
+                
+                while (newPos < TheSongList.listMenuEntries.size() && (TheSongList.listMenuEntries[newPos].isHeader || TheSongList.listMenuEntries[newPos].hiddenEntry)) {
+                    newPos++;
+                }
+                
+                if (newPos < TheSongList.listMenuEntries.size()) {
+                    prevAnimatingSongID = currentPos;
+                    int songID = TheSongList.listMenuEntries[newPos].songListID;
+                    TheSongList.curSong = &TheSongList.songs[songID];
+                    animatingSongID = newPos;
+                    animationStartTime = GetTime();
+                    ComputeSongTextMetrics(*TheSongList.curSong);
+                    
+                    if (!TheAudioManager.loadedStreams.empty()) {
+                        for (auto& stream : TheAudioManager.loadedStreams) {
+                            TheAudioManager.StopPlayback(stream.handle);
+                        }
+                        TheAudioManager.loadedStreams.clear();
+                        currentPreviewVolume = 0.0f;
+                        previewState = PreviewState::FadeIn;
+                    }
+                    
+                    if (!TheSongList.curSong->AlbumArtLoaded) {
+                        try {
+                            TheSongList.curSong->LoadAlbumArt();
+                            TheSongList.curSong->AlbumArtLoaded = true;
+                            SetTextureWrap(TheSongList.curSong->albumArtBlur, TEXTURE_WRAP_REPEAT);
+                            SetTextureFilter(TheSongList.curSong->albumArtBlur, TEXTURE_FILTER_ANISOTROPIC_16X);
+                        } catch (const std::exception& e) {
+                            TraceLog(LOG_ERROR, "Failed to load album art: %s", e.what());
+                        }
+                    }
+                    
+                    pendingSongID = songID;
+                    selectionTime = GetTime();
+                }
+            }
         }
-        if (TheSongList.SongSelectOffset < 1)
-            TheSongList.SongSelectOffset = 1;
-
-        // prevent going past bottom
-        if (TheSongList.SongSelectOffset >= TheSongList.listMenuEntries.size() - 10)
-            TheSongList.SongSelectOffset = TheSongList.listMenuEntries.size() - 10;
     }
+}
 void SongSelectMenu::ControllerInputCallback(int joypadID, GLFWgamepadstate state) {}
 std::string SecondsToTimeFormat(int seconds) {
     int minutes = seconds / 60;
@@ -121,29 +214,83 @@ void SongSelectMenu::ComputeSongTextMetrics(Song& song) {
 
     TextMetrics metrics;
     const int songTitleWidth = (u.winpct(0.25f)) - 6;
-    const int songArtistWidth = (u.winpct(0.25f)) - 6;
+    const int songArtistWidth = (u.winpct(0.25f)) - 19;
 
     // i tried........ - Jaydenz
     metrics.titleFontSize = u.hinpct(0.035f);
     metrics.titleTextWidth = MeasureTextEx(assets.rubikBold, song.title.c_str(), metrics.titleFontSize, 0).x;
+    metrics.titleNeedsScroll = false;
+    
     if (metrics.titleTextWidth > songTitleWidth) {
-        metrics.titleFontSize = (songTitleWidth / metrics.titleTextWidth) * u.hinpct(0.035f);
-        const float minFontSize = u.hinpct(0.02f);
-        if (metrics.titleFontSize < minFontSize) metrics.titleFontSize = minFontSize;
-        metrics.titleTextWidth = MeasureTextEx(assets.rubikBold, song.title.c_str(), metrics.titleFontSize, 0).x;
+        if (TheGameSettings.ScrollingSongText) {
+            metrics.titleNeedsScroll = true;
+        } else {
+            metrics.titleFontSize = (songTitleWidth / metrics.titleTextWidth) * u.hinpct(0.035f);
+            const float minFontSize = u.hinpct(0.02f);
+            if (metrics.titleFontSize < minFontSize) metrics.titleFontSize = minFontSize;
+            metrics.titleTextWidth = MeasureTextEx(assets.rubikBold, song.title.c_str(), metrics.titleFontSize, 0).x;
+        }
     }
 
     metrics.artistFontSize = u.hinpct(0.025f);
     metrics.artistTextWidth = MeasureTextEx(assets.josefinSansItalic, song.artist.c_str(), metrics.artistFontSize, 0).x;
+    metrics.artistNeedsScroll = false;
+    
     if (metrics.artistTextWidth > songArtistWidth) {
-        metrics.artistFontSize = (songArtistWidth / metrics.artistTextWidth) * u.hinpct(0.025f);
-        const float minFontSize = u.hinpct(0.02f);
-        if (metrics.artistFontSize < minFontSize) metrics.artistFontSize = minFontSize;
-        metrics.artistTextWidth = MeasureTextEx(assets.josefinSansItalic, song.artist.c_str(), metrics.artistFontSize, 0).x;
+        if (TheGameSettings.ScrollingSongText) {
+            metrics.artistNeedsScroll = true;
+        } else {
+            metrics.artistFontSize = (songArtistWidth / metrics.artistTextWidth) * u.hinpct(0.025f);
+            const float minFontSize = u.hinpct(0.02f);
+            if (metrics.artistFontSize < minFontSize) metrics.artistFontSize = minFontSize;
+            metrics.artistTextWidth = MeasureTextEx(assets.josefinSansItalic, song.artist.c_str(), metrics.artistFontSize, 0).x;
+        }
     }
 
     if (song.songListPos >= 0) {
         songTextMetrics[song.songListPos] = metrics;
+    }
+}
+
+float SongSelectMenu::GetScrollOffset(int songID, float textWidth, float maxWidth, double currentTime, bool isTitle, bool isSelected) {
+    if (!TheGameSettings.ScrollingSongText || !isSelected) return 0.0f;
+    
+    int scrollKey = songID * 2 + (isTitle ? 0 : 1);
+    
+    if (scrollStartTimes.find(scrollKey) == scrollStartTimes.end()) {
+        scrollStartTimes[scrollKey] = currentTime;
+        scrollDirections[scrollKey] = true;
+    }
+    
+    float maxScroll = textWidth - maxWidth;
+    if (maxScroll <= 0) return 0.0f;
+    
+    const double scrollDuration = 4.0;
+    
+    double elapsed = currentTime - scrollStartTimes[scrollKey];
+    const double pauseDuration = 2.0;
+    const double totalCycleDuration = scrollDuration + pauseDuration;
+    
+    if (elapsed >= totalCycleDuration) {
+        scrollDirections[scrollKey] = !scrollDirections[scrollKey];
+        scrollStartTimes[scrollKey] = currentTime;
+        elapsed = 0.0;
+    }
+    
+    if (elapsed < scrollDuration) {
+        float t = (float)(elapsed / scrollDuration);
+        
+        if (scrollDirections[scrollKey]) {
+            return -t * maxScroll;
+        } else {
+            return -(1.0f - t) * maxScroll;
+        }
+    } else {
+        if (scrollDirections[scrollKey]) {
+            return -maxScroll;
+        } else {
+            return 0.0f;
+        }
     }
 }
 
@@ -313,23 +460,38 @@ void SongSelectMenu::Draw() {
     float selectedSongEntryHeight = baseSongEntryHeight * selectedSongHeightMultiplier;
     float cumulativeYOffset = u.hpct(0.266666f);
 
+    float buttonY = GetScreenHeight() - u.hpct(0.1475f);
+    float buttonHeight = u.hinpct(0.05f);
+    float maxScissorHeight = buttonY - u.hpct(0.15f) - u.hinpct(0.01f);
+    
     float scissorHeight = u.hinpct(0.75f);
     if (TheSongList.curSong && TheSongList.curSong->songListPos > 0) {
         float totalListHeight = 0.0f;
         int selectedSongIndex = TheSongList.curSong->songListPos - 1;
+        int totalSongs = TheSongList.listMenuEntries.size();
+        int songsFromEnd = totalSongs - selectedSongIndex - 1;
+        
         for (int i = TheSongList.SongSelectOffset; i < TheSongList.listMenuEntries.size() && i < TheSongList.SongSelectOffset + 10; i++) {
             if (TheSongList.listMenuEntries[i].hiddenEntry) continue;
             bool isAnimating = (i == selectedSongIndex && i == animatingSongID) || (i == prevAnimatingSongID);
             totalListHeight += isAnimating ? selectedSongEntryHeight : (i == selectedSongIndex ? selectedSongEntryHeight : baseSongEntryHeight);
         }
         scissorHeight = u.hpct(0.266666f) + totalListHeight - u.hpct(0.15f);
-        float maxScissorHeight = GetScreenHeight() - u.hpct(0.1475f) - u.hpct(0.15f);
-        if (scissorHeight > maxScissorHeight) scissorHeight = maxScissorHeight;
+        
+        if (songsFromEnd < 6 && scissorHeight > maxScissorHeight) {
+            float extraHeightNeeded = selectedSongEntryHeight - baseSongEntryHeight;
+            scissorHeight = maxScissorHeight + extraHeightNeeded;
+            if (scissorHeight > buttonY - u.hpct(0.15f)) {
+                scissorHeight = buttonY - u.hpct(0.15f);
+            }
+        } else if (scissorHeight > maxScissorHeight) {
+            scissorHeight = maxScissorHeight;
+        }
     }
 
     BeginScissorMode(0, u.hpct(0.15f), u.RightSide - u.winpct(0.25f), scissorHeight);
-    for (int i = TheSongList.SongSelectOffset; i < TheSongList.listMenuEntries.size() && i < TheSongList.SongSelectOffset + 10; i++) {
-        if (TheSongList.listMenuEntries.size() == i) break;
+    for (int i = TheSongList.SongSelectOffset; i < (int)TheSongList.listMenuEntries.size() && i < TheSongList.SongSelectOffset + 10; i++) {
+        if ((int)TheSongList.listMenuEntries.size() == i) break;
         float currentEntryHeight = baseSongEntryHeight;
         bool isCurSong = TheSongList.curSong && i == TheSongList.curSong->songListPos - 1;
         bool isDeselecting = i == prevAnimatingSongID && !isCurSong;
@@ -431,26 +593,148 @@ void SongSelectMenu::Draw() {
             float textXOffset = 10;
 
             auto LightText = Color{ 203, 203, 203, 255 };
-            DrawTextEx(
-                assets.rubikBold,
-                songi.title.c_str(),
-                { songXPos + textXOffset, songYPos + (currentEntryHeight - titleFontSize) / 2 },
-                titleFontSize,
-                0,
-                isCurSong ? WHITE : LightText
-            );
+            
+            float titleScrollOffset = 0.0f;
+            float artistScrollOffset = 0.0f;
+            
+            if (songTextMetrics.find(songi.songListPos) != songTextMetrics.end()) {
+                if (songTextMetrics[songi.songListPos].titleNeedsScroll) {
+                    titleScrollOffset = GetScrollOffset(songi.songListPos, songTextMetrics[songi.songListPos].titleTextWidth, songTitleWidth, curTime, true, isCurSong);
+                }
+                if (songTextMetrics[songi.songListPos].artistNeedsScroll) {
+                    artistScrollOffset = GetScrollOffset(songi.songListPos, songTextMetrics[songi.songListPos].artistTextWidth, songArtistWidth, curTime, false, isCurSong);
+                }
+            }
+            
+            if (!isCurSong) {
+                int titleScrollKey = songi.songListPos * 2;
+                int artistScrollKey = songi.songListPos * 2 + 1;
+                scrollStartTimes.erase(titleScrollKey);
+                scrollStartTimes.erase(artistScrollKey);
+                scrollDirections.erase(titleScrollKey);
+                scrollDirections.erase(artistScrollKey);
+            }
+            
+            if (!TheGameSettings.CompactScoreDisplay && isCurSong && ThePlayerManager.PlayersActive > 0) {
+                Player &player = ThePlayerManager.GetActivePlayer(0);
+                std::string songIDForList = LeaderboardManager::GenerateSongID(songi.title, songi.artist);
+                ScoreData highScoreForList = LeaderboardManager::GetHighestScoreForInstrument(player.PlayerID, songIDForList, static_cast<int>(GetScoreInstrumentFilter()));
+                
+                float titleOnlyHeight = titleFontSize;
+                float titleY = songYPos + (currentEntryHeight - titleOnlyHeight) / 4;
+                
+                BeginScissorMode(songXPos + textXOffset, songYPos, songTitleWidth, currentEntryHeight / 2);
+                DrawTextEx(
+                    assets.rubikBold,
+                    songi.title.c_str(),
+                    { songXPos + textXOffset + titleScrollOffset, titleY },
+                    titleFontSize,
+                    0,
+                    WHITE
+                );
+                EndScissorMode();
+                
+                float scoreY = titleY + titleFontSize + u.hinpct(0.002f);
+                float scoreFontSize = u.hinpct(0.025f);
+                
+                // Draw instrument icon to the left of the score
+                float iconSize = u.hinpct(0.022f);
+                int iconIndex = GetScoreInstrumentIconIndex();
+                DrawTexturePro(
+                    assets.InstIcons[iconIndex],
+                    { 0, 0, (float)assets.InstIcons[iconIndex].width, (float)assets.InstIcons[iconIndex].height },
+                    { songXPos + textXOffset, scoreY, iconSize, iconSize },
+                    { 0, 0 },
+                    0,
+                    WHITE
+                );
+                
+                float scoreStartX = songXPos + textXOffset + iconSize + u.winpct(0.005f);
+                int displayScore = highScoreForList.hasScore ? highScoreForList.score : 0;
+                std::string scoreText = GameMenu::scoreCommaFormatter(displayScore);
+                float scoreTextWidth = MeasureTextEx(assets.rubikBold, scoreText.c_str(), scoreFontSize, 0).x;
+                
+                DrawTextEx(assets.rubikBold, scoreText.c_str(), { scoreStartX, scoreY }, scoreFontSize, 0, GetColor(0x00adffFF));
+                
+                float starScale = u.hinpct(0.02f);
+                float starX = scoreStartX + scoreTextWidth + u.winpct(0.01f);
+                
+                if (highScoreForList.hasScore) {
+                    std::string percentageText = TextFormat("%.0f%%", highScoreForList.hitPercentage);
+                    Color percentageColor = (highScoreForList.hitPercentage >= 100.0f) ? GOLD : WHITE;
+                    float percentageTextWidth = MeasureTextEx(assets.rubik, percentageText.c_str(), u.hinpct(0.02f), 0).x;
+                    
+                    float percentageX = scoreStartX + scoreTextWidth + u.winpct(0.01f);
+                    DrawTextEx(assets.rubik, percentageText.c_str(), { percentageX, scoreY + u.hinpct(0.002f) }, u.hinpct(0.02f), 0, percentageColor);
+                    
+                    if (highScoreForList.hitPercentage >= 100.0f) {
+                        float crownSize = u.hinpct(0.02f);
+                        DrawTexturePro(
+                            assets.crown,
+                            { 0, 0, (float)assets.crown.width, (float)assets.crown.height },
+                            { percentageX + percentageTextWidth + u.winpct(0.003f), scoreY, crownSize, crownSize },
+                            { 0, 0 },
+                            0,
+                            WHITE
+                        );
+                    }
+                    
+                    starX = percentageX + percentageTextWidth + u.winpct(0.01f);
+                    if (highScoreForList.hitPercentage >= 100.0f) {
+                        starX += u.hinpct(0.025f);
+                    }
+                }
+                
+                for (int s = 0; s < 5; s++) {
+                    DrawTexturePro(
+                        assets.emptyStar,
+                        { 0, 0, (float)assets.emptyStar.width, (float)assets.emptyStar.height },
+                        { starX + (s * starScale), scoreY, starScale, starScale },
+                        { 0, 0 },
+                        0,
+                        WHITE
+                    );
+                }
+                if (highScoreForList.hasScore) {
+                    for (int s = 0; s < highScoreForList.stars; s++) {
+                        DrawTexturePro(
+                            highScoreForList.goldStars ? assets.goldStar : assets.star,
+                            { 0, 0, (float)(highScoreForList.goldStars ? assets.goldStar.width : assets.star.width), (float)(highScoreForList.goldStars ? assets.goldStar.height : assets.star.height) },
+                            { starX + (s * starScale), scoreY, starScale, starScale },
+                            { 0, 0 },
+                            0,
+                            WHITE
+                        );
+                    }
+                }
+            } else {
+                BeginScissorMode(songXPos + textXOffset, songYPos, songTitleWidth, currentEntryHeight);
+                DrawTextEx(
+                    assets.rubikBold,
+                    songi.title.c_str(),
+                    { songXPos + textXOffset + titleScrollOffset, songYPos + (currentEntryHeight - titleFontSize) / 2 },
+                    titleFontSize,
+                    0,
+                    isCurSong ? WHITE : LightText
+                );
+                EndScissorMode();
+            }
+            
+            BeginScissorMode(songXPos + textXOffset + songTitleWidth + 25, songYPos, songArtistWidth - 13, currentEntryHeight);
             DrawTextEx(
                 artistFont,
                 songi.artist.c_str(),
-                { songXPos + textXOffset + songTitleWidth, songYPos + (currentEntryHeight - artistFontSize) / 2 },
+                { songXPos + textXOffset + songTitleWidth + 25 + artistScrollOffset, songYPos + (currentEntryHeight - artistFontSize) / 2 },
                 artistFontSize,
                 0,
                 isCurSong ? WHITE : LightText
             );
+            EndScissorMode();
+            
             DrawTextEx(
                 assets.josefinSansItalic,
                 SecondsToTimeFormat(songi.length).c_str(),
-                { songXPos + textXOffset + songTitleWidth + songArtistWidth + 10, songYPos + (currentEntryHeight - u.hinpct(0.025f)) / 2 },
+                { songXPos + textXOffset + songTitleWidth + songArtistWidth + 63, songYPos + (currentEntryHeight - u.hinpct(0.025f)) / 2 },
                 u.hinpct(0.025f),
                 0,
                 isCurSong ? WHITE : LightText
@@ -460,6 +744,83 @@ void SongSelectMenu::Draw() {
         }
     }
     EndScissorMode();
+    
+    if (TheSongList.listMenuEntries.size() > 10) {
+        float scrollbarX = u.RightSide - u.winpct(0.25f) - u.winpct(0.01f);
+        float songsLoadedTextY = u.hinpct(0.165f);
+        float songsLoadedTextHeight = u.hinpct(0.03f);
+        float scrollbarY = songsLoadedTextY + songsLoadedTextHeight + u.hinpct(0.01f);
+        float scrollbarWidth = u.winpct(0.012f);
+        float scrollbarHeight = scissorHeight - (scrollbarY - u.hpct(0.15f));
+        
+        DrawRectangle(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight, Color{255, 255, 255, 50});
+        
+        int totalEntries = TheSongList.listMenuEntries.size();
+        float scrollPercentage = (float)TheSongList.SongSelectOffset / (float)(totalEntries - 10);
+        if (scrollPercentage < 0) scrollPercentage = 0;
+        if (scrollPercentage > 1) scrollPercentage = 1;
+        
+        float thumbHeight = (10.0f / totalEntries) * scrollbarHeight;
+        if (thumbHeight < u.hinpct(0.03f)) thumbHeight = u.hinpct(0.03f);
+        
+        float thumbY = scrollbarY + scrollPercentage * (scrollbarHeight - thumbHeight);
+        
+        Vector2 mousePos = GetMousePosition();
+        bool mouseOnScrollbar = mousePos.x >= scrollbarX && mousePos.x <= scrollbarX + scrollbarWidth &&
+                                mousePos.y >= scrollbarY && mousePos.y <= scrollbarY + scrollbarHeight;
+        
+        if (mouseOnScrollbar && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            isDraggingScrollbar = true;
+        }
+        
+        if (isDraggingScrollbar && IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
+            float clickY = mousePos.y - scrollbarY;
+            float newScrollPercentage = clickY / scrollbarHeight;
+            if (newScrollPercentage < 0) newScrollPercentage = 0;
+            if (newScrollPercentage > 1) newScrollPercentage = 1;
+            
+            int newOffset = (int)(newScrollPercentage * (totalEntries - 10)) + 1;
+            if (newOffset < 1) newOffset = 1;
+            if (newOffset > totalEntries - 10) newOffset = totalEntries - 10;
+            TheSongList.SongSelectOffset = newOffset;
+        }
+        
+        if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+            isDraggingScrollbar = false;
+        }
+        
+        Color thumbColor = mouseOnScrollbar ? Color{255, 255, 255, 255} : Color{255, 255, 255, 200};
+        DrawRectangle(scrollbarX, thumbY, scrollbarWidth, thumbHeight, thumbColor);
+    }
+    
+    if (isDraggingScrollbar && currentSortValue == SortType::Title) {
+        DrawRectangle(0, 0, u.RightSide - u.winpct(0.25f), GetScreenHeight(), Color{0, 0, 0, 150});
+        
+        std::string currentLetter = "";
+        int songIndex = TheSongList.SongSelectOffset;
+        
+        if (songIndex < TheSongList.listMenuEntries.size()) {
+            if (TheSongList.listMenuEntries[songIndex].isHeader) {
+                currentLetter = TheSongList.listMenuEntries[songIndex].headerChar;
+            } else if (!TheSongList.listMenuEntries[songIndex].hiddenEntry) {
+                int songID = TheSongList.listMenuEntries[songIndex].songListID;
+                if (songID < TheSongList.songs.size() && !TheSongList.songs[songID].title.empty()) {
+                    currentLetter = std::string(1, TheSongList.songs[songID].title[0]);
+                }
+            }
+        }
+        
+        if (!currentLetter.empty()) {
+            float letterSize = u.hinpct(0.4f);
+            Vector2 textSize = MeasureTextEx(assets.rubikBold, currentLetter.c_str(), letterSize, 0);
+            float songListWidth = u.RightSide - u.winpct(0.25f);
+            float songListCenterX = u.LeftSide + (songListWidth - u.LeftSide) / 2;
+            float letterX = songListCenterX - (textSize.x / 2);
+            float letterY = (GetScreenHeight() / 2) - (textSize.y / 2);
+            DrawTextEx(assets.rubikBold, currentLetter.c_str(), {letterX, letterY}, letterSize, 0, WHITE);
+        }
+    }
+    
     DrawRectangle(AlbumX - AlbumOuter, AlbumY + AlbumHeight, AlbumHeight + AlbumOuter, AlbumHeight + u.hinpct(0.01f), WHITE);
     DrawRectangle(AlbumX - AlbumInner, AlbumY + AlbumHeight, AlbumHeight, u.hinpct(0.075f) + AlbumHeight, GetColor(0x181827FF));
     DrawRectangle(AlbumX - AlbumOuter, AlbumY - AlbumInner, AlbumHeight + AlbumOuter, AlbumHeight + AlbumOuter, WHITE);
@@ -504,6 +865,9 @@ void SongSelectMenu::Draw() {
                 case SortType::Year:
                     SongTitleForCharThingyThatsTemporary = TheSongList.songs[TheSongList.listMenuEntries[songIndex].songListID].releaseYear.empty() ? "Unknown Year" : TheSongList.songs[TheSongList.listMenuEntries[songIndex].songListID].releaseYear;
                     break;
+                case SortType::Score:
+                    SongTitleForCharThingyThatsTemporary = "By Score";
+                    break;
                 default:
                     SongTitleForCharThingyThatsTemporary = "";
                     break;
@@ -533,17 +897,106 @@ void SongSelectMenu::Draw() {
 
     DrawLine(u.RightSide - AlbumHeight - AlbumOuter, AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.04f)), u.RightSide, AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.04f)), WHITE);
 
-    float DiffTop = AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.045f));
+    if (TheSongList.curSong && ThePlayerManager.PlayersActive > 0) {
+        Player &player = ThePlayerManager.GetActivePlayer(0);
+        std::string songID = LeaderboardManager::GenerateSongID(
+            TheSongList.curSong->title,
+            TheSongList.curSong->artist
+        );
+        ScoreData highScore = LeaderboardManager::GetHighestScoreForInstrument(player.PlayerID, songID, static_cast<int>(GetScoreInstrumentFilter()));
+        
+        if (TheGameSettings.CompactScoreDisplay) {
+            float scoreDisplayY = AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.05f));
+            float scoreDisplayX = u.RightSide - AlbumHeight + AlbumInner;
+            
+            float iconSize = u.hinpct(0.035f);
+            int iconIndex = GetScoreInstrumentIconIndex();
+            DrawTexturePro(
+                assets.InstIcons[iconIndex],
+                { 0, 0, (float)assets.InstIcons[iconIndex].width, (float)assets.InstIcons[iconIndex].height },
+                { scoreDisplayX, scoreDisplayY, iconSize, iconSize },
+                { 0, 0 },
+                0,
+                WHITE
+            );
+            
+            float scoreStartX = scoreDisplayX + iconSize + u.winpct(0.008f);
+            int displayScore = highScore.hasScore ? highScore.score : 0;
+            std::string scoreText = GameMenu::scoreCommaFormatter(displayScore);
+            float scoreFontSize = u.hinpct(0.04f);
+            float scoreTextWidth = MeasureTextEx(assets.rubikBold, scoreText.c_str(), scoreFontSize, 0).x;
+            
+            DrawTextEx(assets.rubikBold, scoreText.c_str(), { scoreStartX, scoreDisplayY }, scoreFontSize, 0, GetColor(0x00adffFF));
+            
+            if (highScore.hasScore) {
+                std::string percentageText = TextFormat("%.0f%%", highScore.hitPercentage);
+                Color percentageColor = (highScore.hitPercentage >= 100.0f) ? GOLD : WHITE;
+                float percentageTextWidth = MeasureTextEx(assets.rubik, percentageText.c_str(), u.hinpct(0.035f), 0).x;
+                
+                float percentageX = scoreStartX + scoreTextWidth + u.winpct(0.01f);
+                DrawTextEx(assets.rubik, percentageText.c_str(), { percentageX, scoreDisplayY + u.hinpct(0.002f) }, u.hinpct(0.035f), 0, percentageColor);
+                
+                if (highScore.hitPercentage >= 100.0f) {
+                    float crownSize = u.hinpct(0.035f);
+                    DrawTexturePro(
+                        assets.crown,
+                        { 0, 0, (float)assets.crown.width, (float)assets.crown.height },
+                        { percentageX + percentageTextWidth + u.winpct(0.005f), scoreDisplayY, crownSize, crownSize },
+                        { 0, 0 },
+                        0,
+                        WHITE
+                    );
+                }
+            }
+            
+            float starScale = u.hinpct(0.03f);
+            float starY = scoreDisplayY + scoreFontSize + u.hinpct(0.005f);
+            for (int i = 0; i < 5; i++) {
+                DrawTexturePro(
+                    assets.emptyStar,
+                    { 0, 0, (float)assets.emptyStar.width, (float)assets.emptyStar.height },
+                    { scoreDisplayX + (i * starScale), starY, starScale, starScale },
+                    { 0, 0 },
+                    0,
+                    WHITE
+                );
+            }
+            if (highScore.hasScore) {
+                for (int i = 0; i < highScore.stars; i++) {
+                    DrawTexturePro(
+                        highScore.goldStars ? assets.goldStar : assets.star,
+                        { 0, 0, (float)(highScore.goldStars ? assets.goldStar.width : assets.star.width), (float)(highScore.goldStars ? assets.goldStar.height : assets.star.height) },
+                        { scoreDisplayX + (i * starScale), starY, starScale, starScale },
+                        { 0, 0 },
+                        0,
+                        WHITE
+                    );
+                }
+                
+                float statsY = starY + starScale + u.hinpct(0.01f);
+                float statsFontSize = u.hinpct(0.025f);
+                std::string statsText = TextFormat("%d Perfects  %d Goods  %d Misses", highScore.perfectHits, highScore.goodHits, highScore.misses);
+                DrawTextEx(assets.rubik, statsText.c_str(), { scoreDisplayX, statsY }, statsFontSize, 0, WHITE);
+            }
+        }
+    }
+
+    float DiffTop = TheGameSettings.CompactScoreDisplay ? AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.2f)) : AlbumY + AlbumHeight + AlbumOuter + (u.hinpct(0.045f));
     float IconWidth = float(AlbumHeight - AlbumOuter) / 5.0f;
-    GameMenu::mhDrawText(assets.rubikItalic, "Pad", { (u.RightSide - AlbumHeight + AlbumInner), DiffTop }, AlbumOuter * 3, WHITE, assets.sdfShader, LEFT);
-    GameMenu::mhDrawText(assets.rubikItalic, "Classic", { (u.RightSide - AlbumHeight + AlbumInner), DiffTop + IconWidth + (AlbumOuter * 3) }, AlbumOuter * 3, WHITE, assets.sdfShader, LEFT);
-    for (int i = 0; i < 10; i++) {
+    int maxInstruments = TheGameSettings.CompactScoreDisplay ? 5 : 10;
+    
+    if (!TheGameSettings.CompactScoreDisplay) {
+        GameMenu::mhDrawText(assets.rubikItalic, "Pad", { (u.RightSide - AlbumHeight + AlbumInner), DiffTop }, AlbumOuter * 3, WHITE, assets.sdfShader, LEFT);
+        GameMenu::mhDrawText(assets.rubikItalic, "Classic", { (u.RightSide - AlbumHeight + AlbumInner), DiffTop + IconWidth + (AlbumOuter * 3) }, AlbumOuter * 3, WHITE, assets.sdfShader, LEFT);
+    }
+    
+    for (int i = 0; i < maxInstruments; i++) {
         bool RowTwo = i < 5;
         int RowTwoInt = i - 5;
-        float PosTopAddition = RowTwo ? AlbumOuter * 3 : AlbumOuter * 6;
-        float BoxTopPos = DiffTop + PosTopAddition + float(IconWidth * (RowTwo ? 0 : 1));
-        float ResetToLeftPos = (float)(RowTwo ? i : RowTwoInt);
-        int asdasd = (float)(RowTwo ? i : RowTwoInt);
+        float PosTopAddition = TheGameSettings.CompactScoreDisplay ? 0 : (RowTwo ? AlbumOuter * 3 : AlbumOuter * 6);
+        float BoxTopPos = DiffTop + PosTopAddition + float(IconWidth * (TheGameSettings.CompactScoreDisplay ? 0 : (RowTwo ? 0 : 1)));
+        float ResetToLeftPos = (float)(TheGameSettings.CompactScoreDisplay ? i : (RowTwo ? i : RowTwoInt));
+        int asdasd = (float)(TheGameSettings.CompactScoreDisplay ? i : (RowTwo ? i : RowTwoInt));
         float IconLeftPos = (float)(u.RightSide - AlbumHeight) + IconWidth * ResetToLeftPos;
         Rectangle Placement = { IconLeftPos, BoxTopPos, IconWidth, IconWidth };
         Color TintColor = WHITE;
@@ -555,8 +1008,13 @@ void SongSelectMenu::Draw() {
     }
 
     GameMenu::DrawBottomOvershell();
+    
+    float buttonWidth = u.winpct(0.18f);
+    float buttonGap = u.winpct(0.02f);
+    
     GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, ColorToInt(ColorBrightness(AccentColor, -0.25)));
-    if (GuiButton(Rectangle{ u.LeftSide, GetScreenHeight() - u.hpct(0.1475f), u.winpct(0.2f), u.hinpct(0.05f) }, "Play Song")) {
+    GuiSetStyle(BUTTON, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+    if (GuiButton(Rectangle{ u.LeftSide, buttonY + 2.5f, buttonWidth, buttonHeight - 2.5f }, "Play Song")) {
         if (TheSongList.curSong) {
             if (!TheSongList.curSong->ini) {
                 TheSongList.curSong->LoadSong(TheSongList.curSong->songInfoPath);
@@ -573,8 +1031,9 @@ void SongSelectMenu::Draw() {
         }
     }
     GuiSetStyle(BUTTON, BASE_COLOR_NORMAL, 0x181827FF);
+    GuiSetStyle(BUTTON, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
 
-    if (GuiButton(Rectangle{ u.LeftSide + u.winpct(0.4f) - 2, GetScreenHeight() - u.hpct(0.1475f), u.winpct(0.2f), u.hinpct(0.05f) }, "Sort")) {
+    if (GuiButton(Rectangle{ u.LeftSide + (buttonWidth + buttonGap) * 2, buttonY + 2.5f, buttonWidth, buttonHeight - 2.5f }, "Sort")) {
         int selectedSongIndex = -1;
         if (TheSongList.curSong) {
             for (size_t i = 0; i < TheSongList.songs.size(); i++) {
@@ -586,7 +1045,14 @@ void SongSelectMenu::Draw() {
         }
         prevAnimatingSongID = TheSongList.curSong ? TheSongList.curSong->songListPos - 1 : -1;
         currentSortValue = NextSortType(currentSortValue);
-        TheSongList.sortList(currentSortValue, selectedSongIndex);
+        
+        if (currentSortValue == SortType::Score) {
+            Player &player = ThePlayerManager.GetActivePlayer(0);
+            TheSongList.sortListByScore(static_cast<int>(GetScoreInstrumentFilter()), selectedSongIndex, player.PlayerID);
+        } else {
+            TheSongList.sortList(currentSortValue, selectedSongIndex);
+        }
+        
         if (selectedSongIndex >= 0 && selectedSongIndex < TheSongList.songs.size()) {
             TheSongList.curSong = &TheSongList.songs[selectedSongIndex];
             TheSongList.SongSelectOffset = TheSongList.curSong->songListPos - 5;
@@ -617,7 +1083,41 @@ void SongSelectMenu::Draw() {
             ComputeSongTextMetrics(*TheSongList.curSong);
         }
     }
-    if (GuiButton(Rectangle{ u.LeftSide + u.winpct(0.2f) - 1, GetScreenHeight() - u.hpct(0.1475f), u.winpct(0.2f), u.hinpct(0.05f) }, "Back")) {
+    
+    // Instrument filter button - cycles through Vocals -> Bass -> Lead -> Drums
+    // Also re-sorts if currently sorted by Score
+    if (GuiButton(Rectangle{ u.LeftSide + (buttonWidth + buttonGap) * 3, buttonY + 2.5f, buttonWidth, buttonHeight - 2.5f }, GetScoreInstrumentName())) {
+        CycleScoreInstrumentFilter();
+        
+        // Re-sort by score if currently sorted by score
+        if (currentSortValue == SortType::Score) {
+            int selectedSongIndex = -1;
+            if (TheSongList.curSong) {
+                for (size_t i = 0; i < TheSongList.songs.size(); i++) {
+                    if (&TheSongList.songs[i] == TheSongList.curSong) {
+                        selectedSongIndex = i;
+                        break;
+                    }
+                }
+            }
+            prevAnimatingSongID = TheSongList.curSong ? TheSongList.curSong->songListPos - 1 : -1;
+            Player &player = ThePlayerManager.GetActivePlayer(0);
+            TheSongList.sortListByScore(static_cast<int>(GetScoreInstrumentFilter()), selectedSongIndex, player.PlayerID);
+            
+            if (selectedSongIndex >= 0 && selectedSongIndex < TheSongList.songs.size()) {
+                TheSongList.curSong = &TheSongList.songs[selectedSongIndex];
+                TheSongList.SongSelectOffset = TheSongList.curSong->songListPos - 5;
+                if (TheSongList.SongSelectOffset < 1) TheSongList.SongSelectOffset = 1;
+                if (TheSongList.SongSelectOffset > TheSongList.listMenuEntries.size() - 10)
+                    TheSongList.SongSelectOffset = TheSongList.listMenuEntries.size() - 10;
+                animatingSongID = TheSongList.curSong->songListPos - 1;
+                animationStartTime = curTime;
+            }
+        }
+    }
+    
+    GuiSetStyle(BUTTON, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+    if (GuiButton(Rectangle{ u.LeftSide + buttonWidth + buttonGap, buttonY + 2.5f, buttonWidth, buttonHeight - 2.5f }, "Back")) {
         if (!TheAudioManager.loadedStreams.empty()) {
             for (auto& stream : TheAudioManager.loadedStreams) {
                 TheAudioManager.StopPlayback(stream.handle);
